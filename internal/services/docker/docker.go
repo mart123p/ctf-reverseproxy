@@ -15,20 +15,16 @@ func (d *DockerService) Init() {
 	d.shutdown = make(chan bool)
 }
 
-//Start the docker service
+// Start the docker service
 func (d *DockerService) Start() {
 	log.Printf("[Docker] -> Starting docker service")
 	go d.run()
 }
 
-//Shutdown the docker service
+// Shutdown the docker service
 func (d *DockerService) Shutdown() {
 	log.Printf("[Docker] -> Stopping docker service")
 	close(d.shutdown)
-}
-
-func (d *DockerService) Register() {
-	//Register the broadcast channels
 }
 
 func (d *DockerService) run() {
@@ -41,7 +37,7 @@ func (d *DockerService) run() {
 			return
 		default:
 			log.Printf("[Docker] -> Docker service running")
-			time.Sleep(1 * time.Second)
+			time.Sleep(5 * time.Second)
 		}
 	}
 }
