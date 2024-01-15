@@ -11,3 +11,7 @@ func (d *SessionManagerService) Register() {
 	cbroadcast.Register(BDockerRequest, BSize)
 	cbroadcast.Register(BDockerStop, BSize)
 }
+
+// Extracted from internal/services/docker/broadcast.go to avoid circular dependency
+const bDockerReady = "docker:ready"
+const bDockerStop = "docker:stop"

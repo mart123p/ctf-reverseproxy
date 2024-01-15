@@ -6,7 +6,6 @@ import (
 
 	"github.com/mart123p/ctf-reverseproxy/internal/config"
 	service "github.com/mart123p/ctf-reverseproxy/internal/services"
-	"github.com/mart123p/ctf-reverseproxy/internal/services/docker"
 	"github.com/mart123p/ctf-reverseproxy/pkg/cbroadcast"
 )
 
@@ -183,8 +182,8 @@ func (s *SessionManagerService) run() {
 }
 
 func (s *SessionManagerService) subscribe() {
-	s.dockerReady, _ = cbroadcast.Subscribe(docker.BDockerReady)
-	s.dockerStop, _ = cbroadcast.Subscribe(docker.BDockerStop)
+	s.dockerReady, _ = cbroadcast.Subscribe(bDockerReady)
+	s.dockerStop, _ = cbroadcast.Subscribe(bDockerStop)
 }
 
 func getExpiresOn() int64 {
