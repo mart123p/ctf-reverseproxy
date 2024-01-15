@@ -7,6 +7,7 @@ import (
 	"github.com/mart123p/ctf-reverseproxy/internal/services/docker"
 	"github.com/mart123p/ctf-reverseproxy/internal/services/http/mgmt"
 	"github.com/mart123p/ctf-reverseproxy/internal/services/http/reverseproxy"
+	"github.com/mart123p/ctf-reverseproxy/internal/services/sessionmanager"
 	"github.com/mart123p/ctf-reverseproxy/pkg/graceful"
 )
 
@@ -23,6 +24,7 @@ func main() {
 
 func registerServices() {
 	service.Add(&docker.DockerService{})
+	service.Add(&sessionmanager.SessionManagerService{})
 	service.Add(&mgmt.MgmtServer{})
 	service.Add(&reverseproxy.ReverseProxy{})
 }
