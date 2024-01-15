@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/mart123p/ctf-reverseproxy/internal/http/middleware"
 	service "github.com/mart123p/ctf-reverseproxy/internal/services"
+	"github.com/mart123p/ctf-reverseproxy/internal/services/http/mgmt/middleware"
 )
 
 type MgmtServer struct {
@@ -24,6 +24,7 @@ func (m *MgmtServer) Start() {
 
 	m.Router = mux.NewRouter()
 	m.Router.Use(middleware.LogMiddleware)
+	m.Router.Use(middleware.AuthMiddleware)
 	m.Router.StrictSlash(true)
 	m.setRoutes()
 	m.Router.NotFoundHandler = middleware.LogMiddleware(http.HandlerFunc(defaultRoute))
