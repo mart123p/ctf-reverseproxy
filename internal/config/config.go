@@ -32,6 +32,7 @@ func setupDefault() {
 	viper.SetDefault(CReverseProxyHost, "")
 	viper.SetDefault(CReverseProxyPort, "8000")
 	viper.SetDefault(CReverseProxySessionHeader, "X-Session-Id")
+	viper.SetDefault(CReverseProxySessionTimeout, "300")
 
 	viper.SetDefault(CMgmtHost, "")
 	viper.SetDefault(CMgmtPort, "8080")
@@ -45,6 +46,10 @@ func GetString(key string) string {
 
 func GetInt(key string) int {
 	return viper.GetInt(key)
+}
+
+func GetInt64(key string) int64 {
+	return viper.GetInt64(key)
 }
 
 func GetAddr(hostname string, portname string) string {

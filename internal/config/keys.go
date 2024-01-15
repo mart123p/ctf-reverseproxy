@@ -6,6 +6,7 @@ const CReverseProxyHost = "reverseproxy.host"
 const CReverseProxyPort = "reverseproxy.port"
 const CReverseProxySessionHeader = "reverseproxy.session.header"
 const CReverseProxySessionSalt = "reverseproxy.session.salt"
+const CReverseProxySessionTimeout = "reverseproxy.session.timeout" //Timeout in seconds
 
 const CMgmtHost = "mgmt.host"
 const CMgmtPort = "mgmt.port"

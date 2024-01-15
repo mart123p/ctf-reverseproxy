@@ -3,7 +3,9 @@ reverseproxy:
   # port: 8000 # default
   session:
     # header: X-Session-Id # default
+    # timeout: 300 # default 5 minutes
     salt: CHANGE_ME
+    
 mgmt:
   # host: "" # default listen on all interfaces
   # port: 8080 # default port for the management interface
