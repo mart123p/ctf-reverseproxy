@@ -37,6 +37,10 @@ func (m *MgmtServer) Head(path string, f func(w http.ResponseWriter, r *http.Req
 func (m *MgmtServer) setRoutes() {
 	m.Get("/healthz", api.GetHealthz)
 	m.Get("/metrics", api.GetMetrics)
+
+	m.Get("/session", api.GetSession)
+	m.Post("/session/{id}", api.PostSession)
+	m.Delete("/session/{id}", api.DeleteSession)
 }
 
 func defaultRoute(w http.ResponseWriter, r *http.Request) {
