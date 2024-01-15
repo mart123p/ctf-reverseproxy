@@ -2,7 +2,7 @@ package sessionmanager
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
+	"encoding/base64"
 	"fmt"
 
 	"github.com/mart123p/ctf-reverseproxy/internal/config"
@@ -21,7 +21,8 @@ func GetHash(sessionId string) string {
 	} else {
 		hashSalt := fmt.Sprintf("%s%s", sessionId, salt)
 		hashBytes := sha256.Sum256([]byte(hashSalt))
-		hash = hex.EncodeToString(hashBytes[:])
+
+		hash = base64.StdEncoding.EncodeToString(hashBytes[:])
 	}
 	return hash
 }
