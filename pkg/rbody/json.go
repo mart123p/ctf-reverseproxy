@@ -21,6 +21,6 @@ func JSON(w http.ResponseWriter, status int, payload interface{}) {
 
 // JSONError makes the error response with payload as json format
 func JSONError(w http.ResponseWriter, code int, message string) {
-	log.Printf("[REST] %d -> %s", code, message)
+	log.Printf("[HTTP Mgmt] %d -> %s", code, message)
 	JSON(w, code, map[string]string{"Error": message})
 }
