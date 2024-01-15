@@ -23,7 +23,7 @@ func GetHash(sessionId string) string {
 		hashSalt := fmt.Sprintf("%s%s", sessionId, salt)
 		hashBytes := sha256.Sum256([]byte(hashSalt))
 
-		hash = base64.StdEncoding.EncodeToString(hashBytes[:])
+		hash = base64.URLEncoding.EncodeToString(hashBytes[:])
 		hash = strings.ReplaceAll(hash, "=", "")
 	}
 	return hash
