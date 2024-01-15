@@ -10,6 +10,7 @@ import (
 )
 
 type SessionState struct {
+	SessionID string
 	Addr      string
 	ExpiresOn int64
 }
@@ -70,9 +71,9 @@ func (s *SessionManagerService) run() {
 			log.Printf("[SessionManager] -> SessionManager service closed")
 			return
 		case matchRequest := <-s.MatchChan:
-			log.Printf("[SessionManager] -> Match request received | Session ID: %s", matchRequest.sessionID)
+			log.Printf("[SessionManager] -> Match request received | Session: %s", matchRequest.sessionHash)
 
-			if session, ok := s.sessionMap[matchRequest.sessionID]; ok {
+			if session, ok := s.sessionMap[matchRequest.sessionHash]; ok {
 				session.ExpiresOn = getExpiresOn()
 				matchRequest.responseChan <- session.Addr
 				continue
@@ -93,31 +94,32 @@ func (s *SessionManagerService) run() {
 			s.containerPoolQueue = s.containerPoolQueue[1:]
 
 			//Add the container to the map
-			s.containerMap[container] = matchRequest.sessionID
+			s.containerMap[container] = matchRequest.sessionHash
 
 			//Add the session to the map
-			s.sessionMap[matchRequest.sessionID] = &SessionState{
+			s.sessionMap[matchRequest.sessionHash] = &SessionState{
+				SessionID: matchRequest.sessionID,
 				Addr:      container,
 				ExpiresOn: getExpiresOn(),
 			}
 
-			log.Printf("[SessionManager] -> Container assigned to session | Session ID: %s | Container ID: %s", matchRequest.sessionID, container)
+			log.Printf("[SessionManager] -> Container assigned to session | Session: %s | Container ID: %s", matchRequest.sessionHash, container)
 
 			matchRequest.responseChan <- container //Returns the url for the right container
 
 		case deleteRequest := <-s.DeleteChan:
-			sessionID := deleteRequest.sessionID
+			sessionHash := deleteRequest.sessionHash
 
 			found := false
 			//Check if there is a session assigned to the container
-			if session, ok := s.sessionMap[sessionID]; ok {
+			if session, ok := s.sessionMap[sessionHash]; ok {
 				// Remove the container from the maps
-				delete(s.sessionMap, sessionID)
+				delete(s.sessionMap, sessionHash)
 				delete(s.containerMap, session.Addr)
-				log.Printf("[SessionManager] -> Session removed | Session ID: %s", sessionID)
+				log.Printf("[SessionManager] -> Session removed | Session: %s", sessionHash)
 				found = true
 			} else {
-				log.Printf("[SessionManager] -> Session not found | Session ID: %s", sessionID)
+				log.Printf("[SessionManager] -> Session not found | Session: %s", sessionHash)
 			}
 
 			deleteRequest.responseChan <- found
@@ -126,8 +128,8 @@ func (s *SessionManagerService) run() {
 			log.Printf("[SessionManager] -> Get sessions request received")
 
 			sessionMap := make(map[string]SessionState)
-			for sessionID, session := range s.sessionMap {
-				sessionMap[sessionID] = *session
+			for sessionHash, session := range s.sessionMap {
+				sessionMap[sessionHash] = *session
 			}
 
 			responseChan <- sessionMap
@@ -142,8 +144,9 @@ func (s *SessionManagerService) run() {
 				s.requestQueue = s.requestQueue[1:]
 
 				//Add the container to the map
-				s.containerMap[dockerReady.(string)] = match.sessionID
-				s.sessionMap[match.sessionID] = &SessionState{
+				s.containerMap[dockerReady.(string)] = match.sessionHash
+				s.sessionMap[match.sessionHash] = &SessionState{
+					SessionID: match.sessionID,
 					Addr:      dockerReady.(string),
 					ExpiresOn: getExpiresOn(),
 				}
@@ -167,19 +170,19 @@ func (s *SessionManagerService) run() {
 			}
 
 			// Check if there is a session assigned to the container
-			if sessionID, ok := s.containerMap[dockerStop.(string)]; ok {
+			if sessionHash, ok := s.containerMap[dockerStop.(string)]; ok {
 				// Remove the container from the maps
 				delete(s.containerMap, dockerStop.(string))
-				delete(s.sessionMap, sessionID)
+				delete(s.sessionMap, sessionHash)
 			}
 		case <-ticker.C:
 			//Check if there are sessions that have expired
-			for sessionID, session := range s.sessionMap {
+			for sessionHash, session := range s.sessionMap {
 				if session.ExpiresOn < time.Now().Unix() {
-					log.Printf("[SessionManager] -> Session expired | Session ID: %s", sessionID)
+					log.Printf("[SessionManager] -> Session expired | Session: %s", sessionHash)
 
 					// Remove the container from the maps
-					delete(s.sessionMap, sessionID)
+					delete(s.sessionMap, sessionHash)
 					delete(s.containerMap, session.Addr)
 
 					//Send broadcast docker service to stop the container

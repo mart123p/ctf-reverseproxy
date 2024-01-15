@@ -2,11 +2,12 @@ package sessionmanager
 
 type matchRequest struct {
 	sessionID    string
+	sessionHash  string
 	responseChan chan string //Channel to send the container url
 }
 
 type deleteRequest struct {
-	sessionID    string
+	sessionHash  string
 	responseChan chan bool
 }
 
@@ -18,11 +19,12 @@ func GetSessions() map[string]SessionState {
 	return <-responseChan
 }
 
-// MatchSessionContainer returns the url of the container that is matched to the sessionID
-func MatchSessionContainer(sessionID string) string {
+// MatchSessionContainer returns the url of the container that is matched to the sessionHash
+func MatchSessionContainer(sessionID string, sessionHash string) string {
 	//Create a match request
 	match := matchRequest{
 		sessionID:    sessionID,
+		sessionHash:  sessionHash,
 		responseChan: make(chan string),
 	}
 
@@ -33,10 +35,10 @@ func MatchSessionContainer(sessionID string) string {
 	return <-match.responseChan
 }
 
-func DeleteSession(sessionID string) bool {
+func DeleteSession(sessionHash string) bool {
 	//Create a delete request
 	delete := deleteRequest{
-		sessionID:    sessionID,
+		sessionHash:  sessionHash,
 		responseChan: make(chan bool),
 	}
 

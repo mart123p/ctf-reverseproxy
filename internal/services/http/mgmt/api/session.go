@@ -19,9 +19,9 @@ func GetSession(w http.ResponseWriter, r *http.Request) {
 
 func PostSession(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	id := vars["id"]
-	sessionId := sessionmanager.GetHash(id)
-	addr := sessionmanager.MatchSessionContainer(sessionId)
+	sessionId := vars["id"]
+	sessionHash := sessionmanager.GetHash(sessionId)
+	addr := sessionmanager.MatchSessionContainer(sessionId, sessionHash)
 
 	rbody.JSON(w, http.StatusCreated, struct {
 		SessionId string
@@ -36,10 +36,10 @@ func PostSession(w http.ResponseWriter, r *http.Request) {
 
 func DeleteSession(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	id := vars["id"]
-	sessionId := sessionmanager.GetHash(id)
+	sessionId := vars["id"]
+	sessionHash := sessionmanager.GetHash(sessionId)
 
-	if sessionmanager.DeleteSession(sessionId) {
+	if sessionmanager.DeleteSession(sessionHash) {
 		rbody.JSON(w, http.StatusOK, "Session deleted")
 		return
 	}

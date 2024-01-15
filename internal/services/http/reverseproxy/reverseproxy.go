@@ -19,8 +19,9 @@ type ReverseProxy struct {
 
 func (rp *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
-	sessionId := sessionmanager.GetHash(r.Header.Get(rp.sessionHeader))
-	targetHost := sessionmanager.MatchSessionContainer(sessionId)
+	sessionId := r.Header.Get(rp.sessionHeader)
+	sessionHash := sessionmanager.GetHash(sessionId)
+	targetHost := sessionmanager.MatchSessionContainer(sessionId, sessionHash)
 
 	// Create a new reverse proxy
 	proxy := &httputil.ReverseProxy{
@@ -32,7 +33,7 @@ func (rp *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		},
 
 		ModifyResponse: func(resp *http.Response) error {
-			log.Printf("[ReverseProxy] %s %s - %s http://%s%s %d %d", resp.Request.RemoteAddr, sessionId, resp.Request.Method, targetHost, resp.Request.URL.Path, resp.StatusCode, resp.ContentLength)
+			log.Printf("[ReverseProxy] %s %s - %s http://%s%s %d %d", resp.Request.RemoteAddr, sessionHash, resp.Request.Method, targetHost, resp.Request.URL.Path, resp.StatusCode, resp.ContentLength)
 			return nil
 		},
 	}
