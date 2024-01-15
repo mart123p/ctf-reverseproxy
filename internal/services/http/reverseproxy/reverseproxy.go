@@ -32,6 +32,9 @@ func (rp *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				sessionId = "none"
 			}
 
+			//TODO add a hashing system for the session id.
+			//Should likely add salt to the hash to increase security in case id is very weak.
+
 			log.Printf("[ReverseProxy] %s %s - %s http://%s%s %d %d", resp.Request.RemoteAddr, sessionId, resp.Request.Method, rp.targetHost, resp.Request.URL.Path, resp.StatusCode, resp.ContentLength)
 			return nil
 		},
