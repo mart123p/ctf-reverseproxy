@@ -5,14 +5,21 @@ import (
 	"time"
 
 	service "github.com/mart123p/ctf-reverseproxy/internal/services"
+	"github.com/mart123p/ctf-reverseproxy/internal/services/sessionmanager"
+	"github.com/mart123p/ctf-reverseproxy/pkg/cbroadcast"
 )
 
 type DockerService struct {
 	shutdown chan bool
+
+	dockerRequest cbroadcast.Channel
+	dockerStop    cbroadcast.Channel
 }
 
 func (d *DockerService) Init() {
 	d.shutdown = make(chan bool)
+
+	d.subscribe()
 }
 
 // Start the docker service
@@ -28,16 +35,31 @@ func (d *DockerService) Shutdown() {
 }
 
 func (d *DockerService) run() {
+	ticker := time.NewTicker(time.Second * 5)
 	defer service.Closed()
+	defer ticker.Stop()
 
 	for {
 		select {
 		case <-d.shutdown:
 			log.Printf("[Docker] -> Docker service closed")
 			return
-		default:
+		case <-d.dockerRequest:
+			log.Printf("[Docker] -> Docker request received")
+			//TODO make sure that it actually creates a container
+
+			cbroadcast.Broadcast(BDockerReady, "localhost:3000")
+
+		case containerAddr := <-d.dockerStop:
+			log.Printf("[Docker] -> Docker stop received %s ", containerAddr)
+
+		case <-ticker.C:
 			log.Printf("[Docker] -> Docker service running")
-			time.Sleep(5 * time.Second)
 		}
 	}
+}
+
+func (d *DockerService) subscribe() {
+	d.dockerRequest, _ = cbroadcast.Subscribe(sessionmanager.BDockerRequest)
+	d.dockerStop, _ = cbroadcast.Subscribe(sessionmanager.BDockerStop)
 }
