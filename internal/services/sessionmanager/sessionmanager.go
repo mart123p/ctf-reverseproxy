@@ -18,20 +18,16 @@ func (s *SessionManagerService) Init() {
 	singleton = s
 }
 
-//Start the sessionmanager service
+// Start the sessionmanager service
 func (s *SessionManagerService) Start() {
 	log.Printf("[SessionManager] -> Starting sessionmanager service")
 	go s.run()
 }
 
-//Shutdown the sessionmanager service
+// Shutdown the sessionmanager service
 func (s *SessionManagerService) Shutdown() {
 	log.Printf("[SessionManager] -> Stopping sessionmanager service")
 	close(s.shutdown)
-}
-
-func (s *SessionManagerService) Register() {
-	//Register the broadcast channels
 }
 
 func (s *SessionManagerService) run() {
