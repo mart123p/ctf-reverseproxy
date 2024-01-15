@@ -10,14 +10,26 @@ import (
 
 func GetSession(w http.ResponseWriter, r *http.Request) {
 	sessions := sessionmanager.GetSessions()
-	rbody.JSON(w, http.StatusOK, sessions)
+	rbody.JSON(w, http.StatusOK, struct {
+		Sessions map[string]sessionmanager.SessionState
+	}{
+		Sessions: sessions,
+	})
 }
 
 func PostSession(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	sessionId := vars["id"]
+	id := vars["id"]
+	sessionId := sessionmanager.GetHash(id)
 	sessionmanager.MatchSessionContainer(sessionId)
-	rbody.JSON(w, http.StatusCreated, "Session created")
+
+	rbody.JSON(w, http.StatusCreated, struct {
+		SessionId string
+		Message   string
+	}{
+		SessionId: sessionId,
+		Message:   "Session created",
+	})
 }
 
 func DeleteSession(w http.ResponseWriter, r *http.Request) {
