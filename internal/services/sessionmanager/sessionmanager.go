@@ -10,8 +10,8 @@ import (
 )
 
 type SessionState struct {
-	addr      string
-	expiresOn int64
+	Addr      string
+	ExpiresOn int64
 }
 
 type SessionManagerService struct {
@@ -23,10 +23,11 @@ type SessionManagerService struct {
 	dockerReady cbroadcast.Channel
 	dockerStop  cbroadcast.Channel
 
-	containerQueue []string        //Queue used to keep track of the pool of containers that are ready to be used
-	requestQueue   []*matchRequest //Queue used to keep track of the requests that are waiting for a container to be ready
-	sessions       map[string]*SessionState
-	containerMap   map[string]string //Map used to keep track of the containers that are assigned to a session
+	containerPoolQueue []string        //Queue used to keep track of the pool of containers that are ready to be used
+	requestQueue       []*matchRequest //Queue used to keep track of the requests that are waiting for a container to be ready
+
+	sessionMap   map[string]*SessionState
+	containerMap map[string]string //Map used to keep track of the containers that are assigned to a session
 }
 
 func (s *SessionManagerService) Init() {
@@ -36,8 +37,9 @@ func (s *SessionManagerService) Init() {
 	s.DeleteChan = make(chan deleteRequest)
 	s.GetSessionsChan = make(chan chan map[string]SessionState)
 
-	s.sessions = make(map[string]*SessionState)
-	s.containerQueue = make([]string, 0)
+	s.sessionMap = make(map[string]*SessionState)
+	s.containerMap = make(map[string]string)
+	s.containerPoolQueue = make([]string, 0)
 	s.requestQueue = make([]*matchRequest, 0)
 
 	s.subscribe()
@@ -70,9 +72,9 @@ func (s *SessionManagerService) run() {
 		case matchRequest := <-s.MatchChan:
 			log.Printf("[SessionManager] -> Match request received | Session ID: %s", matchRequest.sessionID)
 
-			if session, ok := s.sessions[matchRequest.sessionID]; ok {
-				session.expiresOn = getExpiresOn()
-				matchRequest.responseChan <- session.addr
+			if session, ok := s.sessionMap[matchRequest.sessionID]; ok {
+				session.ExpiresOn = getExpiresOn()
+				matchRequest.responseChan <- session.Addr
 				continue
 			}
 
@@ -80,23 +82,23 @@ func (s *SessionManagerService) run() {
 			cbroadcast.Broadcast(BDockerRequest, nil)
 
 			//Check if the queue is empty
-			if len(s.containerQueue) == 0 {
+			if len(s.containerPoolQueue) == 0 {
 				log.Printf("[SessionManager] -> No containers available")
 				s.requestQueue = append(s.requestQueue, &matchRequest)
 				continue
 			}
 
 			//Get the first container
-			container := s.containerQueue[0]
-			s.containerQueue = s.containerQueue[1:]
+			container := s.containerPoolQueue[0]
+			s.containerPoolQueue = s.containerPoolQueue[1:]
 
 			//Add the container to the map
 			s.containerMap[container] = matchRequest.sessionID
 
 			//Add the session to the map
-			s.sessions[matchRequest.sessionID] = &SessionState{
-				addr:      container,
-				expiresOn: getExpiresOn(),
+			s.sessionMap[matchRequest.sessionID] = &SessionState{
+				Addr:      container,
+				ExpiresOn: getExpiresOn(),
 			}
 
 			log.Printf("[SessionManager] -> Container assigned to session | Session ID: %s | Container ID: %s", matchRequest.sessionID, container)
@@ -108,10 +110,10 @@ func (s *SessionManagerService) run() {
 
 			found := false
 			//Check if there is a session assigned to the container
-			if session, ok := s.sessions[sessionID]; ok {
+			if session, ok := s.sessionMap[sessionID]; ok {
 				// Remove the container from the maps
-				delete(s.sessions, sessionID)
-				delete(s.containerMap, session.addr)
+				delete(s.sessionMap, sessionID)
+				delete(s.containerMap, session.Addr)
 				log.Printf("[SessionManager] -> Session removed | Session ID: %s", sessionID)
 				found = true
 			} else {
@@ -124,7 +126,7 @@ func (s *SessionManagerService) run() {
 			log.Printf("[SessionManager] -> Get sessions request received")
 
 			sessionMap := make(map[string]SessionState)
-			for sessionID, session := range s.sessions {
+			for sessionID, session := range s.sessionMap {
 				sessionMap[sessionID] = *session
 			}
 
@@ -139,20 +141,27 @@ func (s *SessionManagerService) run() {
 				match := s.requestQueue[0]
 				s.requestQueue = s.requestQueue[1:]
 
+				//Add the container to the map
+				s.containerMap[dockerReady.(string)] = match.sessionID
+				s.sessionMap[match.sessionID] = &SessionState{
+					Addr:      dockerReady.(string),
+					ExpiresOn: getExpiresOn(),
+				}
+
 				//Send the response
 				match.responseChan <- dockerReady.(string) //Returns addr for the container
 			} else {
 				//Add the container to the queue
-				s.containerQueue = append(s.containerQueue, dockerReady.(string))
+				s.containerPoolQueue = append(s.containerPoolQueue, dockerReady.(string))
 			}
 
 		case dockerStop := <-s.dockerStop:
 			log.Printf("[SessionManager] -> Docker stop event received | Container ID: %s", dockerStop)
 			//Remove the container from the queue
-			for i, container := range s.containerQueue {
+			for i, container := range s.containerPoolQueue {
 				if container == dockerStop.(string) {
-					s.containerQueue[i] = s.containerQueue[len(s.containerQueue)-1]
-					s.containerQueue = s.containerQueue[:len(s.containerQueue)-1]
+					s.containerPoolQueue[i] = s.containerPoolQueue[len(s.containerPoolQueue)-1]
+					s.containerPoolQueue = s.containerPoolQueue[:len(s.containerPoolQueue)-1]
 					break
 				}
 			}
@@ -161,20 +170,20 @@ func (s *SessionManagerService) run() {
 			if sessionID, ok := s.containerMap[dockerStop.(string)]; ok {
 				// Remove the container from the maps
 				delete(s.containerMap, dockerStop.(string))
-				delete(s.sessions, sessionID)
+				delete(s.sessionMap, sessionID)
 			}
 		case <-ticker.C:
 			//Check if there are sessions that have expired
-			for sessionID, session := range s.sessions {
-				if session.expiresOn < time.Now().Unix() {
+			for sessionID, session := range s.sessionMap {
+				if session.ExpiresOn < time.Now().Unix() {
 					log.Printf("[SessionManager] -> Session expired | Session ID: %s", sessionID)
 
 					// Remove the container from the maps
-					delete(s.sessions, sessionID)
-					delete(s.containerMap, session.addr)
+					delete(s.sessionMap, sessionID)
+					delete(s.containerMap, session.Addr)
 
 					//Send broadcast docker service to stop the container
-					cbroadcast.Broadcast(BDockerStop, session.addr)
+					cbroadcast.Broadcast(BDockerStop, session.Addr)
 				}
 			}
 		}
