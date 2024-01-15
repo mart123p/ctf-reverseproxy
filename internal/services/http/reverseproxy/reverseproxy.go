@@ -8,6 +8,7 @@ import (
 	"time"
 
 	service "github.com/mart123p/ctf-reverseproxy/internal/services"
+	"github.com/mart123p/ctf-reverseproxy/internal/services/sessionmanager"
 )
 
 type ReverseProxy struct {
@@ -28,12 +29,7 @@ func (rp *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		ModifyResponse: func(resp *http.Response) error {
 			sessionId := resp.Request.Header.Get(rp.sessionHeader)
-			if sessionId == "" {
-				sessionId = "none"
-			}
-
-			//TODO add a hashing system for the session id.
-			//Should likely add salt to the hash to increase security in case id is very weak.
+			sessionId = sessionmanager.GetHash(sessionId)
 
 			log.Printf("[ReverseProxy] %s %s - %s http://%s%s %d %d", resp.Request.RemoteAddr, sessionId, resp.Request.Method, rp.targetHost, resp.Request.URL.Path, resp.StatusCode, resp.ContentLength)
 			return nil
