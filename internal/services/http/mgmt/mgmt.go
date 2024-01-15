@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/mart123p/ctf-reverseproxy/internal/config"
 	service "github.com/mart123p/ctf-reverseproxy/internal/services"
 	"github.com/mart123p/ctf-reverseproxy/internal/services/http/mgmt/middleware"
 )
@@ -46,8 +47,7 @@ func (m *MgmtServer) Register() {
 func (m *MgmtServer) run() {
 	defer service.Closed()
 
-	host := ":8080" //Management port
-	//TODO expose this port as a setting
+	host := config.GetAddr(config.CMgmtHost, config.CMgmtPort)
 
 	m.h = &http.Server{Addr: host, Handler: m.Router}
 

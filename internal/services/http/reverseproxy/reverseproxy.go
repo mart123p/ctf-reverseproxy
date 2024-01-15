@@ -7,6 +7,7 @@ import (
 	"net/http/httputil"
 	"time"
 
+	"github.com/mart123p/ctf-reverseproxy/internal/config"
 	service "github.com/mart123p/ctf-reverseproxy/internal/services"
 	"github.com/mart123p/ctf-reverseproxy/internal/services/sessionmanager"
 )
@@ -41,10 +42,9 @@ func (rp *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (rp *ReverseProxy) Init() {
-	rp.sessionHeader = "X-Session-ID" // Header used for session ID. TODO include the header in settings
+	rp.sessionHeader = config.GetString(config.CReverseProxySessionHeader)
 }
 
-// Implement the service interface used in mgmt.go
 func (rp *ReverseProxy) Start() {
 	log.Printf("[ReverseProxy] -> Starting Reverse Proxy Server")
 
@@ -65,7 +65,7 @@ func (rp *ReverseProxy) Shutdown() {
 func (rp *ReverseProxy) run() {
 	defer service.Closed()
 
-	host := ":8000" //Reverse proxy port
+	host := config.GetAddr(config.CReverseProxyHost, config.CReverseProxyPort)
 
 	// Start the reverse proxy server
 	rp.h = &http.Server{

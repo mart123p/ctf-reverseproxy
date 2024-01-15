@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 
+	"github.com/mart123p/ctf-reverseproxy/internal/config"
 	service "github.com/mart123p/ctf-reverseproxy/internal/services"
 	"github.com/mart123p/ctf-reverseproxy/internal/services/docker"
 	"github.com/mart123p/ctf-reverseproxy/internal/services/http/mgmt"
@@ -12,6 +13,8 @@ import (
 )
 
 func main() {
+	config.Init()
+
 	graceful.Register(service.ShutdownAll, "Services") //Shutdown all services
 	handleGraceful := graceful.ListenSIG()
 

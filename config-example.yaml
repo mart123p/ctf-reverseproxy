@@ -1,0 +1,13 @@
+reverseproxy:
+  # host: "" # default listen on all interfaces
+  # port: 8000 # default
+  session:
+    # header: X-Session-Id # default
+    salt: CHANGE_ME
+mgmt:
+  # host: "" # default listen on all interfaces
+  # port: 8080 # default port for the management interface
+  key: CHANGE_ME # Key used to authenticate to management apis
+
+docker:
+  # host: unix:///var/run/docker.sock # default unix socket
