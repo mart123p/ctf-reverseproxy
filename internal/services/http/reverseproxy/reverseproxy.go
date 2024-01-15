@@ -13,25 +13,25 @@ import (
 
 type ReverseProxy struct {
 	h             *http.Server
-	targetHost    string
 	sessionHeader string
 }
 
 func (rp *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+
+	sessionId := sessionmanager.GetHash(r.Header.Get(rp.sessionHeader))
+	targetHost := sessionmanager.GetContainerUrl(sessionId)
+
 	// Create a new reverse proxy
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
 			req.URL.Scheme = "http"
-			req.URL.Host = rp.targetHost
+			req.URL.Host = targetHost
 			req.URL.Path = r.URL.Path
 			req.URL.RawQuery = r.URL.RawQuery
 		},
 
 		ModifyResponse: func(resp *http.Response) error {
-			sessionId := resp.Request.Header.Get(rp.sessionHeader)
-			sessionId = sessionmanager.GetHash(sessionId)
-
-			log.Printf("[ReverseProxy] %s %s - %s http://%s%s %d %d", resp.Request.RemoteAddr, sessionId, resp.Request.Method, rp.targetHost, resp.Request.URL.Path, resp.StatusCode, resp.ContentLength)
+			log.Printf("[ReverseProxy] %s %s - %s http://%s%s %d %d", resp.Request.RemoteAddr, sessionId, resp.Request.Method, targetHost, resp.Request.URL.Path, resp.StatusCode, resp.ContentLength)
 			return nil
 		},
 	}
@@ -41,7 +41,6 @@ func (rp *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (rp *ReverseProxy) Init() {
-	rp.targetHost = "localhost:3000"  // TODO add the target host in the settings
 	rp.sessionHeader = "X-Session-ID" // Header used for session ID. TODO include the header in settings
 }
 
@@ -74,7 +73,7 @@ func (rp *ReverseProxy) run() {
 		Handler: rp,
 	}
 
-	log.Printf("[ReverseProxy] -> Server is started on %s | proxy host: %s", host, rp.targetHost)
+	log.Printf("[ReverseProxy] -> Server is started on %s", host)
 
 	err := rp.h.ListenAndServe()
 	if err != nil {

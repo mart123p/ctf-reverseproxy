@@ -7,11 +7,15 @@ import (
 )
 
 type SessionManagerService struct {
-	shutdown chan bool
+	shutdown  chan bool
+	MatchChan chan MatchRequest
 }
 
 func (s *SessionManagerService) Init() {
 	s.shutdown = make(chan bool)
+	s.MatchChan = make(chan MatchRequest)
+
+	singleton = s
 }
 
 //Start the sessionmanager service
@@ -38,6 +42,10 @@ func (s *SessionManagerService) run() {
 		case <-s.shutdown:
 			log.Printf("[SessionManager] -> SessionManager service closed")
 			return
+		case match := <-s.MatchChan:
+			log.Printf("[SessionManager] -> Match request received | Session ID: %s", match.SessionID)
+			//Check if the match is not already matched
+			match.ResponseChan <- "localhost:3000" //Returns the url for the right container
 		}
 	}
 }
