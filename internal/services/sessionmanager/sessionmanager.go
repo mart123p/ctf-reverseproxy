@@ -16,25 +16,30 @@ type SessionState struct {
 }
 
 type SessionManagerService struct {
-	shutdown  chan bool
-	MatchChan chan MatchRequest
+	shutdown        chan bool
+	MatchChan       chan matchRequest
+	DeleteChan      chan deleteRequest // Remove a session
+	GetSessionsChan chan chan map[string]SessionState
 
 	dockerReady cbroadcast.Channel
 	dockerStop  cbroadcast.Channel
 
 	containerQueue []string        //Queue used to keep track of the pool of containers that are ready to be used
-	requestQueue   []*MatchRequest //Queue used to keep track of the requests that are waiting for a container to be ready
+	requestQueue   []*matchRequest //Queue used to keep track of the requests that are waiting for a container to be ready
 	sessions       map[string]*SessionState
 	containerMap   map[string]string //Map used to keep track of the containers that are assigned to a session
 }
 
 func (s *SessionManagerService) Init() {
 	s.shutdown = make(chan bool)
-	s.MatchChan = make(chan MatchRequest)
+
+	s.MatchChan = make(chan matchRequest)
+	s.DeleteChan = make(chan deleteRequest)
+	s.GetSessionsChan = make(chan chan map[string]SessionState)
 
 	s.sessions = make(map[string]*SessionState)
 	s.containerQueue = make([]string, 0)
-	s.requestQueue = make([]*MatchRequest, 0)
+	s.requestQueue = make([]*matchRequest, 0)
 
 	s.subscribe()
 
@@ -63,12 +68,12 @@ func (s *SessionManagerService) run() {
 		case <-s.shutdown:
 			log.Printf("[SessionManager] -> SessionManager service closed")
 			return
-		case match := <-s.MatchChan:
-			log.Printf("[SessionManager] -> Match request received | Session ID: %s", match.SessionID)
+		case matchRequest := <-s.MatchChan:
+			log.Printf("[SessionManager] -> Match request received | Session ID: %s", matchRequest.sessionID)
 
-			if session, ok := s.sessions[match.SessionID]; ok {
+			if session, ok := s.sessions[matchRequest.sessionID]; ok {
 				session.expiresOn = getExpiresOn()
-				match.ResponseChan <- session.addr
+				matchRequest.responseChan <- session.addr
 				continue
 			}
 
@@ -78,7 +83,7 @@ func (s *SessionManagerService) run() {
 			//Check if the queue is empty
 			if len(s.containerQueue) == 0 {
 				log.Printf("[SessionManager] -> No containers available")
-				s.requestQueue = append(s.requestQueue, &match)
+				s.requestQueue = append(s.requestQueue, &matchRequest)
 				continue
 			}
 
@@ -87,17 +92,44 @@ func (s *SessionManagerService) run() {
 			s.containerQueue = s.containerQueue[1:]
 
 			//Add the container to the map
-			s.containerMap[container] = match.SessionID
+			s.containerMap[container] = matchRequest.sessionID
 
 			//Add the session to the map
-			s.sessions[match.SessionID] = &SessionState{
+			s.sessions[matchRequest.sessionID] = &SessionState{
 				addr:      container,
 				expiresOn: getExpiresOn(),
 			}
 
-			log.Printf("[SessionManager] -> Container assigned to session | Session ID: %s | Container ID: %s", match.SessionID, container)
+			log.Printf("[SessionManager] -> Container assigned to session | Session ID: %s | Container ID: %s", matchRequest.sessionID, container)
 
-			match.ResponseChan <- container //Returns the url for the right container
+			matchRequest.responseChan <- container //Returns the url for the right container
+
+		case deleteRequest := <-s.DeleteChan:
+			sessionID := deleteRequest.sessionID
+
+			found := false
+			//Check if there is a session assigned to the container
+			if session, ok := s.sessions[sessionID]; ok {
+				// Remove the container from the maps
+				delete(s.sessions, sessionID)
+				delete(s.containerMap, session.addr)
+				log.Printf("[SessionManager] -> Session removed | Session ID: %s", sessionID)
+				found = true
+			} else {
+				log.Printf("[SessionManager] -> Session not found | Session ID: %s", sessionID)
+			}
+
+			deleteRequest.responseChan <- found
+
+		case responseChan := <-s.GetSessionsChan:
+			log.Printf("[SessionManager] -> Get sessions request received")
+
+			sessionMap := make(map[string]SessionState)
+			for sessionID, session := range s.sessions {
+				sessionMap[sessionID] = *session
+			}
+
+			responseChan <- sessionMap
 
 		case dockerReady := <-s.dockerReady:
 			log.Printf("[SessionManager] -> Docker ready event received | Container ID: %s", dockerReady)
@@ -109,7 +141,7 @@ func (s *SessionManagerService) run() {
 				s.requestQueue = s.requestQueue[1:]
 
 				//Send the response
-				match.ResponseChan <- dockerReady.(string) //Returns addr for the container
+				match.responseChan <- dockerReady.(string) //Returns addr for the container
 			} else {
 				//Add the container to the queue
 				s.containerQueue = append(s.containerQueue, dockerReady.(string))

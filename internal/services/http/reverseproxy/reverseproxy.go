@@ -20,7 +20,7 @@ type ReverseProxy struct {
 func (rp *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	sessionId := sessionmanager.GetHash(r.Header.Get(rp.sessionHeader))
-	targetHost := sessionmanager.GetContainerUrl(sessionId)
+	targetHost := sessionmanager.MatchSessionContainer(sessionId)
 
 	// Create a new reverse proxy
 	proxy := &httputil.ReverseProxy{
