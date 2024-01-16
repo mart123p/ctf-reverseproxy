@@ -14,10 +14,17 @@ type DockerService struct {
 
 	dockerRequest cbroadcast.Channel
 	dockerStop    cbroadcast.Channel
+
+	currentId int //Id used to increment everytime a new container is deployed
+
+	compose composeFile
 }
 
 func (d *DockerService) Init() {
 	d.shutdown = make(chan bool)
+	d.currentId = 1
+
+	d.compose = composeFile{}
 
 	d.subscribe()
 }
@@ -38,6 +45,8 @@ func (d *DockerService) run() {
 	ticker := time.NewTicker(time.Second * 5)
 	defer service.Closed()
 	defer ticker.Stop()
+
+	d.validation()
 
 	for {
 		select {
