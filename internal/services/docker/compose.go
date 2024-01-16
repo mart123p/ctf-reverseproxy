@@ -10,6 +10,7 @@ import (
 )
 
 type composeFile struct {
+	ctfNetwork  string
 	mainService int
 	project     *types.Project
 }
@@ -50,7 +51,7 @@ func (d *DockerService) validation() {
 			if annotation, ok := service.Annotations[ctfReverseProxyAnnotation]; ok {
 				if strings.ToLower(annotation) == "true" {
 					if annotationFound {
-						log.Fatalf("[Docker] [Compose] -> Multiple services with %s annotation found. Only one service can use the annotation", ctfReverseProxyAnnotation)
+						log.Fatalf("[Docker] [Compose] -> Multiple services with \"%s\" annotation found. Only one service can use the annotation", ctfReverseProxyAnnotation)
 					}
 					annotationFound = true
 					mainService = service.Name
@@ -61,11 +62,25 @@ func (d *DockerService) validation() {
 
 		//Check that no ports are exposed by the ports tag.
 		if service.Ports != nil {
-			log.Fatalf("[Docker] [Compose] -> Service %s has ports exposed. Please use the expose directive instead", service.Name)
+			log.Fatalf("[Docker] [Compose] -> Service \"%s\" has ports exposed. Please use the expose directive instead", service.Name)
+		}
+
+		//Check that an image is present
+		if service.Image == "" {
+			log.Fatalf("[Docker] [Compose] -> Service \"%s\" has no image specified. An image needs to be specified", service.Name)
+		}
+
+		//Check that no volumes are specified
+		if service.Volumes != nil {
+			log.Fatalf("[Docker] [Compose] -> Service \"%s\" has volumes specified. Volumes are not supported", service.Name)
 		}
 	}
 
-	log.Printf("[Docker] [Compose] -> Main service found: %s", mainService)
+	if project.Volumes != nil && len(project.Volumes) > 0 {
+		log.Fatalf("[Docker] [Compose] -> Volumes are not supported")
+	}
+
+	log.Printf("[Docker] [Compose] -> Main service found: \"%s\"", mainService)
 	log.Printf("[Docker] [Compose] -> Compose file validated")
 	d.compose.project = project
 }

@@ -4,6 +4,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/docker/docker/client"
+	"github.com/mart123p/ctf-reverseproxy/internal/config"
 	service "github.com/mart123p/ctf-reverseproxy/internal/services"
 	"github.com/mart123p/ctf-reverseproxy/internal/services/sessionmanager"
 	"github.com/mart123p/ctf-reverseproxy/pkg/cbroadcast"
@@ -17,7 +19,8 @@ type DockerService struct {
 
 	currentId int //Id used to increment everytime a new container is deployed
 
-	compose composeFile
+	compose      composeFile
+	dockerClient *client.Client
 }
 
 func (d *DockerService) Init() {
@@ -25,6 +28,7 @@ func (d *DockerService) Init() {
 	d.currentId = 1
 
 	d.compose = composeFile{}
+	d.compose.ctfNetwork = config.GetString(config.CDockerNetwork)
 
 	d.subscribe()
 }
@@ -32,6 +36,16 @@ func (d *DockerService) Init() {
 // Start the docker service
 func (d *DockerService) Start() {
 	log.Printf("[Docker] -> Starting docker service")
+
+	var err error
+	d.dockerClient, err = client.NewClientWithOpts(client.FromEnv,
+		client.WithHost(config.GetString(config.CDockerHost)))
+	if err != nil {
+		panic(err)
+	}
+
+	d.validation()
+
 	go d.run()
 }
 
@@ -43,14 +57,17 @@ func (d *DockerService) Shutdown() {
 
 func (d *DockerService) run() {
 	ticker := time.NewTicker(time.Second * 5)
-	defer service.Closed()
-	defer ticker.Stop()
 
-	d.validation()
+	defer d.dockerClient.Close()
+	defer ticker.Stop()
+	defer service.Closed()
+
+	d.upDocker()
 
 	for {
 		select {
 		case <-d.shutdown:
+			d.downDocker()
 			log.Printf("[Docker] -> Docker service closed")
 			return
 		case <-d.dockerRequest:
