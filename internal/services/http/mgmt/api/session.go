@@ -8,6 +8,11 @@ import (
 	"github.com/mart123p/ctf-reverseproxy/pkg/rbody"
 )
 
+type SessionResponse struct {
+	SessionId string
+	Addr      string
+}
+
 func GetSession(w http.ResponseWriter, r *http.Request) {
 	sessions := sessionmanager.GetSessions()
 	rbody.JSON(w, http.StatusOK, struct {
@@ -24,13 +29,14 @@ func PostSession(w http.ResponseWriter, r *http.Request) {
 	addr := sessionmanager.MatchSessionContainer(sessionId, sessionHash)
 
 	rbody.JSON(w, http.StatusCreated, struct {
-		SessionId string
-		Addr      string
-		Message   string
+		Session SessionResponse
+		Message string
 	}{
-		SessionId: sessionId,
-		Addr:      addr,
-		Message:   "Session created",
+		Session: SessionResponse{
+			SessionId: sessionId,
+			Addr:      addr,
+		},
+		Message: "Session created",
 	})
 }
 
