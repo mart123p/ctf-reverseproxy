@@ -13,3 +13,11 @@ mgmt:
 
 docker:
   # host: unix:///var/run/docker.sock # default unix socket
+  
+  # Configuration for the docker reverse proxy
+  # network: ctf-bridge # default network name
+  
+  # Docker compose configuration
+  # compose:
+    # workdir: . # Default workdir where the docker compose file is stored
+    # file: docker-compose.yml # Default docker compose file name

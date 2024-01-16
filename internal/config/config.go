@@ -38,6 +38,11 @@ func setupDefault() {
 	viper.SetDefault(CMgmtPort, "8080")
 
 	viper.SetDefault(CDockerHost, "unix:///var/run/docker.sock")
+
+	viper.SetDefault(CDockerNetwork, "ctf-bridge")
+	viper.SetDefault(CDockerComposeWorkdir, ".")
+	viper.SetDefault(CDockerComposeFile, "docker-compose.yml")
+
 }
 
 func GetString(key string) string {
