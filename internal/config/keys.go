@@ -7,6 +7,7 @@ const CReverseProxyPort = "reverseproxy.port"
 const CReverseProxySessionHeader = "reverseproxy.session.header"
 const CReverseProxySessionSalt = "reverseproxy.session.salt"
 const CReverseProxySessionTimeout = "reverseproxy.session.timeout" //Timeout in seconds
+const CReverseProxyPool = "reverseproxy.pool"                      //Basic number of containers that will be created
 
 const CMgmtHost = "mgmt.host"
 const CMgmtPort = "mgmt.port"

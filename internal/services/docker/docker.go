@@ -72,13 +72,15 @@ func (d *DockerService) run() {
 			return
 		case <-d.dockerRequest:
 			log.Printf("[Docker] -> Docker request received")
-			//TODO make sure that it actually creates a container
 
-			cbroadcast.Broadcast(BDockerReady, "localhost:3000")
+			addr := d.startResource(d.currentId)
+			d.currentId++
+
+			cbroadcast.Broadcast(BDockerReady, addr)
 
 		case containerAddr := <-d.dockerStop:
 			log.Printf("[Docker] -> Docker stop received %s ", containerAddr)
-
+			//TODO: Stop the resource associated with the the id.
 		case <-ticker.C:
 			log.Printf("[Docker] -> Docker service running")
 		}

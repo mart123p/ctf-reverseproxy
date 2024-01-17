@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/strslice"
 	"github.com/docker/go-connections/nat"
-
-	composetypes "github.com/compose-spec/compose-go/types"
+	"github.com/mart123p/ctf-reverseproxy/internal/config"
+	"github.com/mart123p/ctf-reverseproxy/pkg/cbroadcast"
 )
 
 const ctfReverseProxyLabel = "ctf-reverseproxy.resource"
@@ -32,28 +34,6 @@ func getName(name string, id int) string {
 		return fmt.Sprintf("%s%d", name, id)
 	}
 	return fmt.Sprintf("%s-%d", name, id)
-}
-
-// toMobyEnv converts a compose.MappingWithEquals to a []string
-func toMobyEnv(environment composetypes.MappingWithEquals) []string {
-	var env []string
-	for k, v := range environment {
-		if v == nil {
-			env = append(env, k)
-		} else {
-			env = append(env, fmt.Sprintf("%s=%s", k, *v))
-		}
-	}
-	return env
-}
-
-func buildContainerPorts(s composetypes.ServiceConfig) nat.PortSet {
-	ports := nat.PortSet{}
-	for _, s := range s.Expose {
-		p := nat.Port(s)
-		ports[p] = struct{}{}
-	}
-	return ports
 }
 
 // upDocker makes docker ready to deploy containers
@@ -88,6 +68,15 @@ func (d *DockerService) upDocker() {
 	}
 
 	log.Printf("[Docker] -> Docker CTF requirements created")
+
+	//Create the pool of containers
+	poolSize := config.GetInt(config.CReverseProxyPool)
+	log.Printf("[Docker] -> Creating %d containers", poolSize)
+	for i := 0; i < poolSize; i++ {
+		addr := d.startResource(d.currentId)
+		d.currentId++
+		cbroadcast.Broadcast(BDockerReady, addr)
+	}
 }
 
 // downDocker destroy all containers and networks
@@ -123,7 +112,7 @@ func (d *DockerService) downDocker() {
 	log.Printf("[Docker] -> Docker CTF requirements removed")
 }
 
-func (d *DockerService) startResource(ctfId int) {
+func (d *DockerService) startResource(ctfId int) string {
 	log.Printf("[Docker] -> Starting resources %d", ctfId)
 
 	networkIds := make(map[string]string)
@@ -146,22 +135,65 @@ func (d *DockerService) startResource(ctfId int) {
 		networkIds[network.Name] = networkResponse.ID
 	}
 
+	addr := ""
+
 	//Create the containers
-	for _, service := range d.compose.project.Services {
+	for i, service := range d.compose.project.Services {
 		serviceName := getName(service.Name, ctfId)
 
+		if i == d.compose.mainService {
+			addr = fmt.Sprintf("%s:%s", serviceName, service.Expose[0])
+		}
+
+		//Container configuration
 		config := container.Config{
-			Hostname:   serviceName,
-			Domainname: serviceName,
+			Hostname:        serviceName,
+			Domainname:      serviceName,
+			User:            service.User,
+			ExposedPorts:    buildContainerPorts(service),
+			Tty:             service.Tty,
+			OpenStdin:       service.StdinOpen,
+			StdinOnce:       false,
+			AttachStdin:     false,
+			AttachStderr:    true,
+			AttachStdout:    true,
+			Cmd:             strslice.StrSlice(service.Command),
+			Image:           service.Image,
+			WorkingDir:      service.WorkingDir,
+			Entrypoint:      strslice.StrSlice(service.Entrypoint),
+			NetworkDisabled: service.NetworkMode == "disabled",
+			MacAddress:      service.MacAddress,
 			Labels: map[string]string{
 				ctfReverseProxyLabel: "true",
 			},
-			User:         service.User,
-			WorkingDir:   service.WorkingDir,
-			Entrypoint:   strslice.StrSlice(service.Entrypoint),
-			Cmd:          strslice.StrSlice(service.Command),
-			Env:          toMobyEnv(service.Environment),
-			ExposedPorts: buildContainerPorts(service),
+			StopSignal: service.StopSignal,
+			Env:        toMobyEnv(service.Environment),
+		}
+
+		if service.StopGracePeriod != nil {
+			stopTimeout := int(time.Duration(*service.StopGracePeriod).Seconds())
+			config.StopTimeout = &stopTimeout
+		}
+
+		if service.HealthCheck != nil && !service.HealthCheck.Disable {
+			config.Healthcheck = &container.HealthConfig{
+				Test: service.HealthCheck.Test,
+			}
+			if service.HealthCheck.Interval != nil {
+				config.Healthcheck.Interval = time.Duration(*service.HealthCheck.Interval)
+			}
+
+			if service.HealthCheck.Timeout != nil {
+				config.Healthcheck.Timeout = time.Duration(*service.HealthCheck.Timeout)
+			}
+
+			if service.HealthCheck.StartPeriod != nil {
+				config.Healthcheck.StartPeriod = time.Duration(*service.HealthCheck.StartPeriod)
+			}
+
+			if service.HealthCheck.Retries != nil {
+				config.Healthcheck.Retries = int(*service.HealthCheck.Retries)
+			}
 		}
 
 		//Iterate over the labels and add them to the container
@@ -171,6 +203,7 @@ func (d *DockerService) startResource(ctfId int) {
 			}
 		}
 
+		//Network configuration
 		networkConfig := network.NetworkingConfig{}
 		networkConfig.EndpointsConfig = make(map[string]*network.EndpointSettings)
 
@@ -181,11 +214,91 @@ func (d *DockerService) startResource(ctfId int) {
 			}
 		}
 
-		_, err := d.dockerClient.ContainerCreate(context.Background(), &config, nil, &networkConfig, nil, serviceName)
+		var networkMode container.NetworkMode
+		if service.NetworkMode == "disabled" {
+			networkMode = container.NetworkMode("none")
+		} else {
+			networkMode = container.NetworkMode("bridge")
+		}
+
+		// MISC
+
+		tmpfs := map[string]string{}
+		for _, t := range service.Tmpfs {
+			if arr := strings.SplitN(t, ":", 2); len(arr) > 1 {
+				tmpfs[arr[0]] = arr[1]
+			} else {
+				tmpfs[arr[0]] = ""
+			}
+		}
+
+		resources := getDeployResources(service)
+		var logConfig container.LogConfig
+		if service.Logging != nil {
+			logConfig = container.LogConfig{
+				Type:   service.Logging.Driver,
+				Config: service.Logging.Options,
+			}
+		}
+		securityOpts, unconfined, err := parseSecurityOpts(d.compose.project, service.SecurityOpt)
 		if err != nil {
 			panic(err)
 		}
+
+		//Host config
+		hostConfig := container.HostConfig{
+			AutoRemove:     false,
+			Binds:          make([]string, 0),
+			Mounts:         make([]mount.Mount, 0),
+			CapAdd:         strslice.StrSlice(service.CapAdd),
+			CapDrop:        strslice.StrSlice(service.CapDrop),
+			NetworkMode:    networkMode,
+			Init:           service.Init,
+			IpcMode:        container.IpcMode(service.Ipc),
+			CgroupnsMode:   container.CgroupnsMode(service.Cgroup),
+			ReadonlyRootfs: service.ReadOnly,
+			RestartPolicy:  getRestartPolicy(service),
+			ShmSize:        int64(service.ShmSize),
+			Sysctls:        service.Sysctls,
+			PortBindings:   nat.PortMap{},
+			Resources:      resources,
+			VolumeDriver:   service.VolumeDriver,
+			VolumesFrom:    service.VolumesFrom,
+			DNS:            service.DNS,
+			DNSSearch:      service.DNSSearch,
+			DNSOptions:     service.DNSOpts,
+			ExtraHosts:     service.ExtraHosts.AsList(),
+			SecurityOpt:    securityOpts,
+			UsernsMode:     container.UsernsMode(service.UserNSMode),
+			UTSMode:        container.UTSMode(service.Uts),
+			Privileged:     service.Privileged,
+			PidMode:        container.PidMode(service.Pid),
+			Tmpfs:          tmpfs,
+			Isolation:      container.Isolation(service.Isolation),
+			Runtime:        service.Runtime,
+			LogConfig:      logConfig,
+			GroupAdd:       service.GroupAdd,
+			Links:          make([]string, 0),
+			OomScoreAdj:    int(service.OomScoreAdj),
+		}
+
+		if unconfined {
+			hostConfig.MaskedPaths = []string{}
+			hostConfig.ReadonlyPaths = []string{}
+		}
+
+		_, err = d.dockerClient.ContainerCreate(context.Background(), &config, &hostConfig, &networkConfig, nil, serviceName)
+		if err != nil {
+			panic(err)
+		}
+
 	}
 
-	log.Printf("[Docker] -> Resource %d started", ctfId)
+	if addr == "" {
+		panic("No address found. The main container could not be located.")
+	}
+
+	log.Printf("[Docker] -> Resource %d started. Addr %s", ctfId, addr)
+
+	return addr
 }

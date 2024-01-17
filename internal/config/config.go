@@ -33,6 +33,7 @@ func setupDefault() {
 	viper.SetDefault(CReverseProxyPort, "8000")
 	viper.SetDefault(CReverseProxySessionHeader, "X-Session-Id")
 	viper.SetDefault(CReverseProxySessionTimeout, "300")
+	viper.SetDefault(CReverseProxyPool, "5")
 
 	viper.SetDefault(CMgmtHost, "")
 	viper.SetDefault(CMgmtPort, "8080")

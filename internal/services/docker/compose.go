@@ -57,6 +57,15 @@ func (d *DockerService) validation() {
 					annotationFound = true
 					mainService = service.Name
 					d.compose.mainService = i
+
+					//Check if a port is exposed
+					if service.Expose == nil || len(service.Expose) == 0 {
+						log.Fatalf("[Docker] [Compose] -> Service \"%s\" has no ports exposed. Please use the expose directive", service.Name)
+					}
+
+					if len(service.Expose) > 1 {
+						log.Printf("[Docker] [Compose] -> Service \"%s\" has multiple ports exposed. Only the first port will be used", service.Name)
+					}
 				}
 			}
 		}
