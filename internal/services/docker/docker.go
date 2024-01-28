@@ -97,7 +97,7 @@ func (d *DockerService) run() {
 			matches := d.reAddrCtfId.FindStringSubmatch(addr)
 			ctfId := -1
 			if len(matches) >= 2 {
-				ctfId, _ = strconv.Atoi(matches[2])
+				ctfId, _ = strconv.Atoi(matches[1])
 			}
 
 			if ctfId == -1 {
