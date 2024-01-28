@@ -225,6 +225,8 @@ func (s *SessionManagerService) run() {
 			}
 
 			// We check if some containers are missing from the sessions + pool. If so we remove them by calling "session:stop"
+			stateMap := make(map[string]bool)
+
 			for _, addr := range state {
 				inContainerMap := true
 				if _, ok := s.containerMap[addr]; !ok {
@@ -242,6 +244,24 @@ func (s *SessionManagerService) run() {
 				if !inContainerMap && !inPool {
 					log.Printf("[SessionManager] -> Container not in pool or session map | Container ID: %s", addr)
 					cbroadcast.Broadcast(BSessionStop, addr)
+				}
+
+				stateMap[addr] = true
+			}
+
+			//Check if the state contains all the containers that are in the pool
+			for _, addr := range s.containerPoolQueue {
+				if _, ok := stateMap[addr]; !ok {
+					log.Printf("[SessionManager] -> Container from pool not in state | Container ID: %s", addr)
+					cbroadcast.Broadcast(bDockerStop, addr)
+				}
+			}
+
+			//Check if the state contains all the containers that are in the session map
+			for _, addr := range s.containerMap {
+				if _, ok := stateMap[addr]; !ok {
+					log.Printf("[SessionManager] -> Container from session map not in state | Container ID: %s", addr)
+					cbroadcast.Broadcast(bDockerStop, addr)
 				}
 			}
 
