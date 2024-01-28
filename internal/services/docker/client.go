@@ -128,6 +128,8 @@ func (d *DockerService) downDocker() {
 
 	for _, network := range networks {
 		if isCtfResource(network.Labels) {
+			_ = d.dockerClient.NetworkDisconnect(context.Background(), network.ID, d.containerId, true)
+
 			d.dockerClient.NetworkRemove(context.Background(), network.ID)
 			log.Printf("[Docker] -> Removed network \"%s\" id: %s", network.Name, network.ID)
 		}
