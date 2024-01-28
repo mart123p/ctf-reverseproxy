@@ -374,6 +374,8 @@ func (d *DockerService) checkState() ([]string, []string) {
 		panic(err)
 	}
 
+	ctfId_max := 0
+
 	for _, container := range containers {
 		if isCtfResource(container.Labels) {
 			//Obtain the ctf id
@@ -384,6 +386,10 @@ func (d *DockerService) checkState() ([]string, []string) {
 				if ctfId == -1 {
 					log.Printf("Warning: [Docker] -> Container %s has an invalid ctf id", container.ID)
 					continue
+				}
+
+				if ctfId > ctfId_max {
+					ctfId_max = ctfId
 				}
 
 				if _, ok := containersCount[ctfId]; !ok {
@@ -400,6 +406,10 @@ func (d *DockerService) checkState() ([]string, []string) {
 				log.Printf("Warning: [Docker] -> Container %s has no ctf id", container.ID)
 			}
 		}
+	}
+
+	if ctfId_max > 0 && ctfId_max >= d.currentId {
+		d.currentId = ctfId_max + 1
 	}
 
 	//Check how many containers are required per ctf id
