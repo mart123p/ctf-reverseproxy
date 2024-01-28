@@ -13,15 +13,23 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/strslice"
 	"github.com/docker/go-connections/nat"
-	"github.com/mart123p/ctf-reverseproxy/internal/config"
-	"github.com/mart123p/ctf-reverseproxy/pkg/cbroadcast"
 )
 
 const ctfReverseProxyLabel = "ctf-reverseproxy.resource"
+const ctfReverseProxyIdLabel = "ctf-reverseproxy.id"
 
 func isCtfResource(labels map[string]string) bool {
 	if label, ok := labels[ctfReverseProxyLabel]; ok {
 		if strings.ToLower(label) == "true" {
+			return true
+		}
+	}
+	return false
+}
+
+func isCtfId(labels map[string]string, id string) bool {
+	if label, ok := labels[ctfReverseProxyIdLabel]; ok {
+		if label == id {
 			return true
 		}
 	}
@@ -68,15 +76,6 @@ func (d *DockerService) upDocker() {
 	}
 
 	log.Printf("[Docker] -> Docker CTF requirements created")
-
-	//Create the pool of containers
-	poolSize := config.GetInt(config.CReverseProxyPool)
-	log.Printf("[Docker] -> Creating %d containers", poolSize)
-	for i := 0; i < poolSize; i++ {
-		addr := d.startResource(d.currentId)
-		d.currentId++
-		cbroadcast.Broadcast(BDockerReady, addr)
-	}
 }
 
 // downDocker destroy all containers and networks
@@ -112,6 +111,39 @@ func (d *DockerService) downDocker() {
 	log.Printf("[Docker] -> Docker CTF requirements removed")
 }
 
+func (d *DockerService) stopResource(ctfId int) {
+	log.Printf("[Docker] -> Stopping resources %d", ctfId)
+
+	//Stop the containers
+	containers, err := d.dockerClient.ContainerList(context.Background(), types.ContainerListOptions{})
+	if err != nil {
+		panic(err)
+	}
+
+	ctfIdStr := fmt.Sprintf("%d", ctfId)
+	for _, container := range containers {
+		if isCtfResource(container.Labels) && isCtfId(container.Labels, ctfIdStr) {
+			d.dockerClient.ContainerRemove(context.Background(), container.ID, types.ContainerRemoveOptions{})
+			log.Printf("[Docker] -> Removed container \"%v\" id: %s", container.Names, container.ID)
+		}
+	}
+
+	//Remove the networks
+	networks, err := d.dockerClient.NetworkList(context.Background(), types.NetworkListOptions{})
+	if err != nil {
+		panic(err)
+	}
+
+	for _, network := range networks {
+		if isCtfResource(network.Labels) && isCtfId(network.Labels, ctfIdStr) {
+			d.dockerClient.NetworkRemove(context.Background(), network.ID)
+			log.Printf("[Docker] -> Removed network \"%s\" id: %s", network.Name, network.ID)
+		}
+	}
+
+	log.Printf("[Docker] -> Resource %d removed", ctfId)
+}
+
 func (d *DockerService) startResource(ctfId int) string {
 	log.Printf("[Docker] -> Starting resources %d", ctfId)
 
@@ -124,7 +156,8 @@ func (d *DockerService) startResource(ctfId int) string {
 		opts := types.NetworkCreate{
 			Driver: "bridge",
 			Labels: map[string]string{
-				ctfReverseProxyLabel: "true",
+				ctfReverseProxyLabel:   "true",
+				ctfReverseProxyIdLabel: fmt.Sprintf("%d", ctfId),
 			},
 		}
 		networkResponse, err := d.dockerClient.NetworkCreate(context.Background(), networkName, opts)
@@ -164,7 +197,8 @@ func (d *DockerService) startResource(ctfId int) string {
 			NetworkDisabled: service.NetworkMode == "disabled",
 			MacAddress:      service.MacAddress,
 			Labels: map[string]string{
-				ctfReverseProxyLabel: "true",
+				ctfReverseProxyLabel:   "true",
+				ctfReverseProxyIdLabel: fmt.Sprintf("%d", ctfId),
 			},
 			StopSignal: service.StopSignal,
 			Env:        toMobyEnv(service.Environment),

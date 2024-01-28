@@ -2,6 +2,8 @@ package docker
 
 import (
 	"log"
+	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/docker/docker/client"
@@ -21,6 +23,8 @@ type DockerService struct {
 
 	compose      composeFile
 	dockerClient *client.Client
+
+	reAddrCtfId *regexp.Regexp
 }
 
 func (d *DockerService) Init() {
@@ -29,6 +33,8 @@ func (d *DockerService) Init() {
 
 	d.compose = composeFile{}
 	d.compose.ctfNetwork = config.GetString(config.CDockerNetwork)
+
+	d.reAddrCtfId = regexp.MustCompile(`-(\d+):`)
 
 	d.subscribe()
 }
@@ -80,14 +86,40 @@ func (d *DockerService) run() {
 
 		case containerAddr := <-d.dockerStop:
 			log.Printf("[Docker] -> Docker stop received %s ", containerAddr)
-			//TODO: Stop the resource associated with the the id.
+			if containerAddr == nil {
+				log.Fatalf("[Docker] -> Docker stop received nil")
+			}
+
+			addr := containerAddr.(string)
+			matches := d.reAddrCtfId.FindStringSubmatch(addr)
+			ctfId := -1
+			if len(matches) >= 2 {
+				ctfId, _ = strconv.Atoi(matches[2])
+			}
+
+			if ctfId == -1 {
+				log.Fatalf("[Docker] -> Docker stop received invalid address %s", addr)
+			}
+
+			d.stopResource(ctfId)
+
+			cbroadcast.Broadcast(BDockerStop, addr)
 		case <-ticker.C:
 			log.Printf("[Docker] -> Docker service running")
+			//TODO: Send the state of the running containers. Session manager will decide to add them to the pool or not
+
+			//Validate state
+			// - Will check if the containers are running.
+			// - If some containers are stopped, we consider the containers dirty and we delete all associated resources
+			// - If the state of a CTF id is valid, we add it to the state report
+
+			//Send the state report to be parsed in the session manager
+			cbroadcast.Broadcast(BDockerState, nil)
 		}
 	}
 }
 
 func (d *DockerService) subscribe() {
-	d.dockerRequest, _ = cbroadcast.Subscribe(sessionmanager.BDockerRequest)
-	d.dockerStop, _ = cbroadcast.Subscribe(sessionmanager.BDockerStop)
+	d.dockerRequest, _ = cbroadcast.Subscribe(sessionmanager.BSessionRequest)
+	d.dockerStop, _ = cbroadcast.Subscribe(sessionmanager.BSessionStop)
 }
