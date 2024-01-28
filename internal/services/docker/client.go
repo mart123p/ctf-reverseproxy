@@ -94,7 +94,9 @@ func (d *DockerService) downDocker() {
 
 	for _, container := range containers {
 		if isCtfResource(container.Labels) {
-			d.dockerClient.ContainerRemove(context.Background(), container.ID, types.ContainerRemoveOptions{})
+			d.dockerClient.ContainerRemove(context.Background(), container.ID, types.ContainerRemoveOptions{
+				Force: true,
+			})
 			log.Printf("[Docker] -> Removed container \"%v\" id: %s", container.Names, container.ID)
 		}
 	}
@@ -127,7 +129,9 @@ func (d *DockerService) stopResource(ctfId int) {
 	ctfIdStr := fmt.Sprintf("%d", ctfId)
 	for _, container := range containers {
 		if isCtfResource(container.Labels) && isCtfId(container.Labels, ctfIdStr) {
-			d.dockerClient.ContainerRemove(context.Background(), container.ID, types.ContainerRemoveOptions{})
+			d.dockerClient.ContainerRemove(context.Background(), container.ID, types.ContainerRemoveOptions{
+				Force: true,
+			})
 			log.Printf("[Docker] -> Removed container \"%v\" id: %s", container.Names, container.ID)
 		}
 	}
