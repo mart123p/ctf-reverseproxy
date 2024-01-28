@@ -199,6 +199,7 @@ func (s *SessionManagerService) run() {
 
 				//Create the containers based on the config on the containers that are currently running
 				requiredContainers := poolSize - len(state)
+				stateLength := len(state)
 
 				//Check if requiredContainers is negative
 				if requiredContainers < 0 {
@@ -207,16 +208,16 @@ func (s *SessionManagerService) run() {
 					for i := 0; i < -requiredContainers; i++ {
 						cbroadcast.Broadcast(BSessionStop, state[i])
 					}
-					continue
-				}
-
-				log.Printf("[SessionManager] -> Requesting %d containers", requiredContainers)
-				for i := 0; i < requiredContainers; i++ {
-					cbroadcast.Broadcast(BSessionRequest, nil)
+					stateLength += requiredContainers
+				} else {
+					log.Printf("[SessionManager] -> Requesting %d containers", requiredContainers)
+					for i := 0; i < requiredContainers; i++ {
+						cbroadcast.Broadcast(BSessionRequest, nil)
+					}
 				}
 
 				//Add the containers to the pool
-				for i := 0; i < len(state); i++ {
+				for i := 0; i < stateLength; i++ {
 					log.Printf("[SessionManager] -> Adding container to pool | Container ID: %s", state[i])
 					s.containerPoolQueue = append(s.containerPoolQueue, state[i])
 				}
@@ -258,7 +259,7 @@ func (s *SessionManagerService) run() {
 			}
 
 			//Check if the state contains all the containers that are in the session map
-			for _, addr := range s.containerMap {
+			for addr := range s.containerMap {
 				if _, ok := stateMap[addr]; !ok {
 					log.Printf("[SessionManager] -> Container from session map not in state | Container ID: %s", addr)
 					cbroadcast.Broadcast(bDockerStop, addr)
