@@ -30,8 +30,9 @@ type SessionManagerService struct {
 
 	started bool
 
-	sessionMap   map[string]*SessionState
-	containerMap map[string]string //Map used to keep track of the containers that are assigned to a session
+	sessionMap          map[string]*SessionState
+	containerMap        map[string]string //Map used to keep track of the containers that are assigned to a session
+	containerRemovedMap map[string]int64  //Map used to keep track of the containers that are removed
 }
 
 func (s *SessionManagerService) Init() {
@@ -43,6 +44,7 @@ func (s *SessionManagerService) Init() {
 
 	s.sessionMap = make(map[string]*SessionState)
 	s.containerMap = make(map[string]string)
+	s.containerRemovedMap = make(map[string]int64)
 	s.containerPoolQueue = make([]string, 0)
 	s.requestQueue = make([]*matchRequest, 0)
 	s.started = false
@@ -207,6 +209,7 @@ func (s *SessionManagerService) run() {
 					//Remove the containers from the pool
 					for i := 0; i < -requiredContainers; i++ {
 						cbroadcast.Broadcast(BSessionStop, state[i])
+						s.containerRemovedMap[state[i]] = getExpiresOnMinute()
 					}
 					stateLength += requiredContainers
 				} else {
@@ -243,8 +246,11 @@ func (s *SessionManagerService) run() {
 				}
 
 				if !inContainerMap && !inPool {
-					log.Printf("[SessionManager] -> Container not in pool or session map | Container ID: %s", addr)
-					cbroadcast.Broadcast(BSessionStop, addr)
+					if _, ok := s.containerRemovedMap[addr]; !ok {
+						log.Printf("[SessionManager] -> Container not in pool or session map | Container ID: %s", addr)
+						cbroadcast.Broadcast(BSessionStop, addr)
+						s.containerRemovedMap[addr] = getExpiresOnMinute()
+					}
 				}
 
 				stateMap[addr] = true
@@ -278,6 +284,14 @@ func (s *SessionManagerService) run() {
 
 					//Send broadcast docker service to stop the container
 					cbroadcast.Broadcast(BSessionStop, session.Addr)
+					s.containerRemovedMap[session.Addr] = getExpiresOnMinute()
+				}
+			}
+
+			//Clean the containerRemovedMap
+			for container, expiresOn := range s.containerRemovedMap {
+				if expiresOn < time.Now().Unix() {
+					delete(s.containerRemovedMap, container)
 				}
 			}
 		}
@@ -292,4 +306,8 @@ func (s *SessionManagerService) subscribe() {
 
 func getExpiresOn() int64 {
 	return time.Now().Unix() + config.GetInt64(config.CReverseProxySessionTimeout)
+}
+
+func getExpiresOnMinute() int64 {
+	return time.Now().Unix() + 60
 }
