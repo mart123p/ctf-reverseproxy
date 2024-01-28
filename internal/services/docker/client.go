@@ -155,6 +155,12 @@ func (d *DockerService) stopResource(ctfId int) {
 		}
 	}
 
+	//Disconnect the reverse proxy from the network
+	err = d.dockerClient.NetworkDisconnect(context.Background(), d.compose.ctfNetworkId, d.containerId, true)
+	if err != nil {
+		panic(err)
+	}
+
 	//Remove the networks
 	networks, err := d.dockerClient.NetworkList(context.Background(), types.NetworkListOptions{})
 	if err != nil {
@@ -208,6 +214,13 @@ func (d *DockerService) startResource(ctfId int) string {
 		}
 
 		networkIds[networkName] = networkResponse.ID
+
+		//Connect the reverse proxy to the network
+		//TODO add a check for multiple network and use the annotations to mark as primary
+		err = d.dockerClient.NetworkConnect(context.Background(), networkResponse.ID, d.containerId, nil)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	addr := ""
@@ -283,7 +296,7 @@ func (d *DockerService) startResource(ctfId int) string {
 		networkConfig := network.NetworkingConfig{}
 		networkConfig.EndpointsConfig = make(map[string]*network.EndpointSettings)
 
-		for serviceNetworkName, _ := range service.Networks {
+		for serviceNetworkName := range service.Networks {
 			networkName := fmt.Sprintf("%s_%s", d.compose.project.Name, serviceNetworkName)
 			networkName = getName(networkName, ctfId)
 			networkConfig.EndpointsConfig[networkName] = &network.EndpointSettings{
