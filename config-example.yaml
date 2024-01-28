@@ -16,6 +16,7 @@ docker:
   
   # Configuration for the docker reverse proxy
   # network: ctf-bridge # default network name
+  container-name: ctf-reverse-proxy # default container name
   
   # Docker compose configuration
   # compose:

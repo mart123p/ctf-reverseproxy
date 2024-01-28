@@ -17,6 +17,6 @@ const CDockerHost = "docker.host"
 
 // Network used by the reverse proxy. This network will be injected into the main container
 const CDockerNetwork = "docker.network"
-
+const CDockerContainerName = "docker.container-name" //Name of the container that will be created
 const CDockerComposeWorkdir = "docker.compose.workdir"
 const CDockerComposeFile = "docker.compose.file" //File of the docker compose file

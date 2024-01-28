@@ -19,6 +19,8 @@ type DockerService struct {
 	dockerRequest cbroadcast.Channel
 	dockerStop    cbroadcast.Channel
 
+	containerId string //Id of the current container
+
 	currentId int //Id used to increment everytime a new container is deployed
 
 	compose      composeFile
@@ -30,6 +32,7 @@ type DockerService struct {
 func (d *DockerService) Init() {
 	d.shutdown = make(chan bool)
 	d.currentId = 1
+	d.containerId = ""
 
 	d.compose = composeFile{}
 	d.compose.ctfNetwork = config.GetString(config.CDockerNetwork)

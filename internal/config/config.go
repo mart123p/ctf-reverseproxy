@@ -41,6 +41,7 @@ func setupDefault() {
 	viper.SetDefault(CDockerHost, "unix:///var/run/docker.sock")
 
 	viper.SetDefault(CDockerNetwork, "ctf-bridge")
+	viper.SetDefault(CDockerContainerName, "")
 	viper.SetDefault(CDockerComposeWorkdir, ".")
 	viper.SetDefault(CDockerComposeFile, "docker-compose.yml")
 
@@ -70,5 +71,9 @@ func validate() {
 
 	if viper.GetString(CMgmtKey) == "" {
 		panic("Error: The management key is not set. Please set it in the config file")
+	}
+
+	if viper.GetString(CDockerContainerName) == "" {
+		panic("Error: The docker container name is not set. Please set it in the config file")
 	}
 }

@@ -10,10 +10,12 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/strslice"
 	"github.com/docker/go-connections/nat"
+	"github.com/mart123p/ctf-reverseproxy/internal/config"
 )
 
 const ctfReverseProxyLabel = "ctf-reverseproxy.resource"
@@ -78,6 +80,23 @@ func (d *DockerService) upDocker() {
 		}
 		log.Printf("[Docker] -> Created network \"%s\"", d.compose.ctfNetwork)
 	}
+
+	reverseProxyContainerName := config.GetString(config.CDockerContainerName)
+
+	//Get the id of the current container based on the name of it
+	containers, _ := d.dockerClient.ContainerList(context.Background(), types.ContainerListOptions{
+		Filters: filters.NewArgs(filters.KeyValuePair{
+			Key:   "name",
+			Value: reverseProxyContainerName,
+		}),
+		All: true,
+	})
+
+	if len(containers) == 0 {
+		log.Fatalf("[Docker] -> No could not find the container id of the reverse proxy \"%s\"", reverseProxyContainerName)
+	}
+	d.containerId = containers[0].ID
+	log.Printf("[Docker] -> Reverse proxy container id: %s", d.containerId)
 
 	log.Printf("[Docker] -> Docker CTF requirements created")
 }
