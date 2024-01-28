@@ -69,6 +69,9 @@ func (d *DockerService) upDocker() {
 		log.Printf("[Docker] -> Creating network \"%s\"", d.compose.ctfNetwork)
 		_, err = d.dockerClient.NetworkCreate(context.Background(), d.compose.ctfNetwork, types.NetworkCreate{
 			Driver: "bridge",
+			Labels: map[string]string{
+				ctfReverseProxyLabel: "true",
+			},
 		})
 		if err != nil {
 			panic(err)
@@ -150,9 +153,24 @@ func (d *DockerService) startResource(ctfId int) string {
 
 	networkIds := make(map[string]string)
 
+	//Get the list of existing networks
+	networks, err := d.dockerClient.NetworkList(context.Background(), types.NetworkListOptions{})
+	if err != nil {
+		panic(err)
+	}
+
+	for _, network := range networks {
+		networkIds[network.Name] = network.ID
+	}
+
 	//Create the networks
 	for _, network := range d.compose.project.Networks {
 		networkName := getName(network.Name, ctfId)
+
+		if _, ok := networkIds[networkName]; ok {
+			log.Printf("[Docker] -> Network \"%s\" already exists", networkName)
+			continue
+		}
 
 		opts := types.NetworkCreate{
 			Driver: "bridge",
@@ -166,7 +184,7 @@ func (d *DockerService) startResource(ctfId int) string {
 			panic(err)
 		}
 
-		networkIds[network.Name] = networkResponse.ID
+		networkIds[networkName] = networkResponse.ID
 	}
 
 	addr := ""
@@ -243,9 +261,10 @@ func (d *DockerService) startResource(ctfId int) string {
 		networkConfig.EndpointsConfig = make(map[string]*network.EndpointSettings)
 
 		for serviceNetworkName, _ := range service.Networks {
-			networkName := getName(serviceNetworkName, ctfId)
+			networkName := fmt.Sprintf("%s_%s", d.compose.project.Name, serviceNetworkName)
+			networkName = getName(networkName, ctfId)
 			networkConfig.EndpointsConfig[networkName] = &network.EndpointSettings{
-				NetworkID: networkIds[serviceNetworkName],
+				NetworkID: networkIds[networkName],
 			}
 		}
 
@@ -327,6 +346,11 @@ func (d *DockerService) startResource(ctfId int) string {
 			panic(err)
 		}
 
+		//Start the container
+		err = d.dockerClient.ContainerStart(context.Background(), serviceName, types.ContainerStartOptions{})
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	if addr == "" {

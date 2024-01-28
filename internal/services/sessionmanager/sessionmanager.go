@@ -217,6 +217,7 @@ func (s *SessionManagerService) run() {
 
 				//Add the containers to the pool
 				for i := 0; i < len(state); i++ {
+					log.Printf("[SessionManager] -> Adding container to pool | Container ID: %s", state[i])
 					s.containerPoolQueue = append(s.containerPoolQueue, state[i])
 				}
 				s.started = true

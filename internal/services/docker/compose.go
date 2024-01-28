@@ -100,5 +100,5 @@ func (d *DockerService) validation() {
 }
 
 func (d *DockerService) getAddr(ctfId int) string {
-	return fmt.Sprintf("%s:%s", d.compose.project.Services[d.compose.mainService].Name, d.compose.project.Services[d.compose.mainService].Expose[0])
+	return fmt.Sprintf("%s-%d:%s", d.compose.project.Services[d.compose.mainService].Name, ctfId, d.compose.project.Services[d.compose.mainService].Expose[0])
 }
