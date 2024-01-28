@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"fmt"
 	"log"
 	"strings"
 
@@ -93,4 +94,8 @@ func (d *DockerService) validation() {
 	log.Printf("[Docker] [Compose] -> Main service found: \"%s\"", mainService)
 	log.Printf("[Docker] [Compose] -> Compose file validated")
 	d.compose.project = project
+}
+
+func (d *DockerService) getAddr(ctfId int) string {
+	return fmt.Sprintf("%s:%s", d.compose.project.Services[d.compose.mainService].Name, d.compose.project.Services[d.compose.mainService].Expose[0])
 }

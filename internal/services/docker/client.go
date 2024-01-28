@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -335,4 +336,60 @@ func (d *DockerService) startResource(ctfId int) string {
 	log.Printf("[Docker] -> Resource %d started. Addr %s", ctfId, addr)
 
 	return addr
+}
+
+func (d *DockerService) checkState() ([]string, []string) {
+	containersCount := make(map[int]int)
+
+	containers, err := d.dockerClient.ContainerList(context.Background(), types.ContainerListOptions{})
+	if err != nil {
+		panic(err)
+	}
+
+	for _, container := range containers {
+		if isCtfResource(container.Labels) {
+			//Obtain the ctf id
+			if ctfIdStr, ok := container.Labels[ctfReverseProxyIdLabel]; ok {
+
+				ctfId := -1
+				ctfId, _ = strconv.Atoi(ctfIdStr)
+				if ctfId == -1 {
+					log.Printf("Warning: [Docker] -> Container %s has an invalid ctf id", container.ID)
+					continue
+				}
+
+				if _, ok := containersCount[ctfId]; !ok {
+					containersCount[ctfId] = 0
+				}
+
+				//Check if the container is running
+				if container.State != "running" && container.State != "created" {
+					log.Printf("Warning: [Docker] -> Container %s is not running", container.ID)
+				} else {
+					containersCount[ctfId]++
+				}
+			} else {
+				log.Printf("Warning: [Docker] -> Container %s has no ctf id", container.ID)
+			}
+		}
+	}
+
+	//Check how many containers are required per ctf id
+	requiredContainerCount := len(d.compose.project.Services)
+
+	dirty := make([]string, 0)
+	state := make([]string, 0)
+
+	for ctfId, countainerCount := range containersCount {
+		addr := d.getAddr(ctfId)
+		if countainerCount != requiredContainerCount {
+			log.Printf("[Docker] -> Container count mismatch. Required: %d, Found: %d. Removing resource: %d", requiredContainerCount, countainerCount, ctfId)
+			d.stopResource(ctfId)
+			dirty = append(dirty, addr)
+		} else {
+			state = append(state, addr)
+		}
+	}
+
+	return dirty, state
 }

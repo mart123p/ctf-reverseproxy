@@ -104,17 +104,17 @@ func (d *DockerService) run() {
 			d.stopResource(ctfId)
 
 			cbroadcast.Broadcast(BDockerStop, addr)
+
 		case <-ticker.C:
 			log.Printf("[Docker] -> Docker service running")
-			//TODO: Send the state of the running containers. Session manager will decide to add them to the pool or not
 
-			//Validate state
-			// - Will check if the containers are running.
-			// - If some containers are stopped, we consider the containers dirty and we delete all associated resources
-			// - If the state of a CTF id is valid, we add it to the state report
+			dirty, state := d.checkState()
+			for _, addr := range dirty {
+				cbroadcast.Broadcast(BDockerStop, addr)
+			}
 
 			//Send the state report to be parsed in the session manager
-			cbroadcast.Broadcast(BDockerState, nil)
+			cbroadcast.Broadcast(BDockerState, state)
 		}
 	}
 }

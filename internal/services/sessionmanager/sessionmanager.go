@@ -179,22 +179,71 @@ func (s *SessionManagerService) run() {
 				delete(s.containerMap, dockerStop.(string))
 				delete(s.sessionMap, sessionHash)
 			}
-		case <-s.dockerState:
-			// TODO if on start we add the containers to the pool.
-			// Containers that are marked as dirty are advertised through the channel docker:stop and are handled this way
-			// We check if the pool contains the right number of containers. If not we request containers "session:request"
-			// We check if some containers are missing from the sessions + pool. If so we remove them by calling "session:stop"
 
-			if !s.started {
-				//Create the containers based on the config on the containers that are currently running
-				poolSize := config.GetInt(config.CReverseProxyPool)
-				log.Printf("[SessionManager] -> Requesting %d containers", poolSize)
-
-				for i := 0; i < poolSize; i++ {
+			//Check if the pool size is enough
+			poolSize := config.GetInt(config.CReverseProxyPool)
+			requiredContainers := poolSize - (len(s.containerPoolQueue) + len(s.requestQueue))
+			if requiredContainers > 0 {
+				log.Printf("[SessionManager] -> Requesting %d containers", requiredContainers)
+				for i := 0; i < requiredContainers; i++ {
 					cbroadcast.Broadcast(BSessionRequest, nil)
 				}
-				s.started = true
 			}
+
+		case stateObj := <-s.dockerState:
+			state := stateObj.([]string)
+			poolSize := config.GetInt(config.CReverseProxyPool)
+
+			//Initialize the pool
+			if !s.started {
+
+				//Create the containers based on the config on the containers that are currently running
+				requiredContainers := poolSize - len(state)
+
+				//Check if requiredContainers is negative
+				if requiredContainers < 0 {
+					log.Printf("[SessionManager] -> Too many containers running removing %d containers", -requiredContainers)
+					//Remove the containers from the pool
+					for i := 0; i < -requiredContainers; i++ {
+						cbroadcast.Broadcast(BSessionStop, state[i])
+					}
+					continue
+				}
+
+				log.Printf("[SessionManager] -> Requesting %d containers", requiredContainers)
+				for i := 0; i < requiredContainers; i++ {
+					cbroadcast.Broadcast(BSessionRequest, nil)
+				}
+
+				//Add the containers to the pool
+				for i := 0; i < len(state); i++ {
+					s.containerPoolQueue = append(s.containerPoolQueue, state[i])
+				}
+				s.started = true
+				continue
+			}
+
+			// We check if some containers are missing from the sessions + pool. If so we remove them by calling "session:stop"
+			for _, addr := range state {
+				inContainerMap := true
+				if _, ok := s.containerMap[addr]; !ok {
+					inContainerMap = false
+				}
+
+				inPool := false
+				for _, containerAddr := range s.containerPoolQueue {
+					if addr == containerAddr {
+						inPool = true
+						break
+					}
+				}
+
+				if !inContainerMap && !inPool {
+					log.Printf("[SessionManager] -> Container not in pool or session map | Container ID: %s", addr)
+					cbroadcast.Broadcast(BSessionStop, addr)
+				}
+			}
+
 		case <-ticker.C:
 			//Check if there are sessions that have expired
 			for sessionHash, session := range s.sessionMap {
