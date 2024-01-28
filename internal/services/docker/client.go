@@ -157,12 +157,6 @@ func (d *DockerService) stopResource(ctfId int) {
 		}
 	}
 
-	//Disconnect the reverse proxy from the network
-	err = d.dockerClient.NetworkDisconnect(context.Background(), d.compose.ctfNetworkId, d.containerId, true)
-	if err != nil {
-		panic(err)
-	}
-
 	//Remove the networks
 	networks, err := d.dockerClient.NetworkList(context.Background(), types.NetworkListOptions{})
 	if err != nil {
@@ -171,6 +165,13 @@ func (d *DockerService) stopResource(ctfId int) {
 
 	for _, network := range networks {
 		if isCtfResource(network.Labels) && isCtfId(network.Labels, ctfIdStr) {
+
+			//Disconnect the reverse proxy from the network
+			err = d.dockerClient.NetworkDisconnect(context.Background(), network.ID, d.containerId, true)
+			if err != nil {
+				log.Printf("Warning: [Docker] -> Could not disconnect the reverse proxy from the network \"%s\", %s", network.Name, err.Error())
+			}
+
 			d.dockerClient.NetworkRemove(context.Background(), network.ID)
 			log.Printf("[Docker] -> Removed network \"%s\" id: %s", network.Name, network.ID)
 		}
