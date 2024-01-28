@@ -23,9 +23,12 @@ type SessionManagerService struct {
 
 	dockerReady cbroadcast.Channel
 	dockerStop  cbroadcast.Channel
+	dockerState cbroadcast.Channel
 
 	containerPoolQueue []string        //Queue used to keep track of the pool of containers that are ready to be used
 	requestQueue       []*matchRequest //Queue used to keep track of the requests that are waiting for a container to be ready
+
+	started bool
 
 	sessionMap   map[string]*SessionState
 	containerMap map[string]string //Map used to keep track of the containers that are assigned to a session
@@ -42,6 +45,7 @@ func (s *SessionManagerService) Init() {
 	s.containerMap = make(map[string]string)
 	s.containerPoolQueue = make([]string, 0)
 	s.requestQueue = make([]*matchRequest, 0)
+	s.started = false
 
 	s.subscribe()
 
@@ -80,7 +84,7 @@ func (s *SessionManagerService) run() {
 			}
 
 			//Request a new container
-			cbroadcast.Broadcast(BDockerRequest, nil)
+			cbroadcast.Broadcast(BSessionRequest, nil)
 
 			//Check if the queue is empty
 			if len(s.containerPoolQueue) == 0 {
@@ -175,6 +179,22 @@ func (s *SessionManagerService) run() {
 				delete(s.containerMap, dockerStop.(string))
 				delete(s.sessionMap, sessionHash)
 			}
+		case <-s.dockerState:
+			// TODO if on start we add the containers to the pool.
+			// Containers that are marked as dirty are advertised through the channel docker:stop and are handled this way
+			// We check if the pool contains the right number of containers. If not we request containers "session:request"
+			// We check if some containers are missing from the sessions + pool. If so we remove them by calling "session:stop"
+
+			if !s.started {
+				//Create the containers based on the config on the containers that are currently running
+				poolSize := config.GetInt(config.CReverseProxyPool)
+				log.Printf("[SessionManager] -> Requesting %d containers", poolSize)
+
+				for i := 0; i < poolSize; i++ {
+					cbroadcast.Broadcast(BSessionRequest, nil)
+				}
+				s.started = true
+			}
 		case <-ticker.C:
 			//Check if there are sessions that have expired
 			for sessionHash, session := range s.sessionMap {
@@ -186,7 +206,7 @@ func (s *SessionManagerService) run() {
 					delete(s.containerMap, session.Addr)
 
 					//Send broadcast docker service to stop the container
-					cbroadcast.Broadcast(BDockerStop, session.Addr)
+					cbroadcast.Broadcast(BSessionStop, session.Addr)
 				}
 			}
 		}
@@ -196,6 +216,7 @@ func (s *SessionManagerService) run() {
 func (s *SessionManagerService) subscribe() {
 	s.dockerReady, _ = cbroadcast.Subscribe(bDockerReady)
 	s.dockerStop, _ = cbroadcast.Subscribe(bDockerStop)
+	s.dockerState, _ = cbroadcast.Subscribe(bDockerState)
 }
 
 func getExpiresOn() int64 {
