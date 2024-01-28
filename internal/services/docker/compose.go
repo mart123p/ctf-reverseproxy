@@ -23,7 +23,10 @@ func (d *DockerService) validation() {
 	filename := config.GetString(config.CDockerComposeFile)
 	workDir := config.GetString(config.CDockerComposeWorkdir)
 
+	log.Printf("[Docker] [Compose] -> Validating compose file \"%s\" in workdir \"%s\"", filename, workDir)
+
 	options, err := cli.NewProjectOptions([]string{filename},
+		cli.WithName("ctf-challenge"),
 		cli.WithWorkingDirectory(workDir),
 		cli.WithDotEnv,
 		cli.WithConfigFileEnv,
