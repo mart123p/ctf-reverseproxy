@@ -110,7 +110,7 @@ func (s *SessionManagerService) run() {
 				ExpiresOn: getExpiresOn(),
 			}
 
-			log.Printf("[SessionManager] -> Container assigned to session | Session: %s | Container ID: %s", matchRequest.sessionHash, container)
+			log.Printf("[SessionManager] -> Container assigned to session | Session: %s | Container Addr: %s", matchRequest.sessionHash, container)
 
 			matchRequest.responseChan <- container //Returns the url for the right container
 
@@ -142,7 +142,7 @@ func (s *SessionManagerService) run() {
 			responseChan <- sessionMap
 
 		case dockerReady := <-s.dockerReady:
-			log.Printf("[SessionManager] -> Docker ready event received | Container ID: %s", dockerReady)
+			log.Printf("[SessionManager] -> Docker ready event received | Container Addr: %s", dockerReady)
 
 			//Check if there are requests waiting
 			if len(s.requestQueue) > 0 {
@@ -166,7 +166,7 @@ func (s *SessionManagerService) run() {
 			}
 
 		case dockerStop := <-s.dockerStop:
-			log.Printf("[SessionManager] -> Docker stop event received | Container ID: %s", dockerStop)
+			log.Printf("[SessionManager] -> Docker stop event received | Container Addr: %s", dockerStop)
 			//Remove the container from the queue
 			for i, container := range s.containerPoolQueue {
 				if container == dockerStop.(string) {
@@ -222,7 +222,7 @@ func (s *SessionManagerService) run() {
 
 				//Add the containers to the pool
 				for i := 0; i < stateLength; i++ {
-					log.Printf("[SessionManager] -> Adding container to pool | Container ID: %s", state[i])
+					log.Printf("[SessionManager] -> Adding container to pool | Container Addr: %s", state[i])
 					s.containerPoolQueue = append(s.containerPoolQueue, state[i])
 				}
 				s.started = true
@@ -248,7 +248,7 @@ func (s *SessionManagerService) run() {
 
 				if !inContainerMap && !inPool {
 					if _, ok := s.containerRemovedMap[addr]; !ok {
-						log.Printf("[SessionManager] -> Container not in pool or session map | Container ID: %s", addr)
+						log.Printf("[SessionManager] -> Container not in pool or session map | Container Addr: %s", addr)
 						cbroadcast.Broadcast(BSessionStop, addr)
 						s.containerRemovedMap[addr] = getExpiresOnMinute()
 					}
@@ -260,7 +260,7 @@ func (s *SessionManagerService) run() {
 			//Check if the state contains all the containers that are in the pool
 			for _, addr := range s.containerPoolQueue {
 				if _, ok := stateMap[addr]; !ok {
-					log.Printf("[SessionManager] -> Container from pool not in state | Container ID: %s", addr)
+					log.Printf("[SessionManager] -> Container from pool not in state | Container Addr: %s", addr)
 					cbroadcast.Broadcast(bDockerStop, addr)
 				}
 			}
@@ -268,7 +268,7 @@ func (s *SessionManagerService) run() {
 			//Check if the state contains all the containers that are in the session map
 			for addr := range s.containerMap {
 				if _, ok := stateMap[addr]; !ok {
-					log.Printf("[SessionManager] -> Container from session map not in state | Container ID: %s", addr)
+					log.Printf("[SessionManager] -> Container from session map not in state | Container Addr: %s", addr)
 					cbroadcast.Broadcast(bDockerStop, addr)
 				}
 			}
