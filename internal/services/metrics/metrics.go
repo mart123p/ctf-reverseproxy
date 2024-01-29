@@ -11,6 +11,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+const prometheusNamespace = "ctf_reverseproxy"
+
 type MetricsService struct {
 	shutdown chan bool
 
@@ -43,33 +45,39 @@ func (m *MetricsService) Init() {
 	m.projectSizeMetric = 0
 
 	m.metrics.projectSize = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "ctf_reverseproxy_project_size",
-		Help: "Size of the current project deployed by the reverse proxy",
+		Name:      "project_size_info",
+		Help:      "Size of the current project deployed by the reverse proxy",
+		Namespace: prometheusNamespace,
 	})
 
 	m.metrics.containerRunning = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "ctf_reverseproxy_containers",
-		Help: "Number of current containers handled by the reverse proxy",
+		Name:      "containers",
+		Help:      "Number of current containers handled by the reverse proxy",
+		Namespace: prometheusNamespace,
 	})
 
 	m.metrics.projectRunning = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "ctf_reverseproxy_projects",
-		Help: "Number of current projects handled by the reverse proxy",
+		Name:      "projects",
+		Help:      "Number of current projects handled by the reverse proxy",
+		Namespace: prometheusNamespace,
 	})
 
 	m.metrics.session = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "ctf_reverseproxy_sessions",
-		Help: "Number of current sessions",
+		Name:      "sessions",
+		Help:      "Number of current sessions",
+		Namespace: prometheusNamespace,
 	})
 
 	m.metrics.sessionServed = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "ctf_reverseproxy_sessions_total",
-		Help: "Number of total sessions served",
+		Name:      "sessions_total",
+		Help:      "Number of total sessions served",
+		Namespace: prometheusNamespace,
 	})
 
 	m.metrics.httpRequestServed = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "ctf_reverseproxy_http_request_proxy_total",
-		Help: "Number of total http requests served",
+		Name:      "http_request_proxy_total",
+		Help:      "Number of total http requests served",
+		Namespace: prometheusNamespace,
 	})
 	m.subscribe()
 }
