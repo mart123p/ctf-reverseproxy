@@ -111,8 +111,6 @@ func (d *DockerService) run() {
 			cbroadcast.Broadcast(BDockerStop, addr)
 
 		case <-ticker.C:
-			log.Printf("[Docker] -> Docker service running")
-
 			dirty, state := d.checkState()
 			for _, addr := range dirty {
 				cbroadcast.Broadcast(BDockerStop, addr)
