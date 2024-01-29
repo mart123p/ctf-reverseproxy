@@ -13,6 +13,7 @@ type SessionState struct {
 	SessionID string
 	Addr      string
 	ExpiresOn int64
+	StartedOn int64
 }
 
 type SessionManagerService struct {
@@ -108,6 +109,7 @@ func (s *SessionManagerService) run() {
 				SessionID: matchRequest.sessionID,
 				Addr:      container,
 				ExpiresOn: getExpiresOn(),
+				StartedOn: time.Now().Unix(),
 			}
 
 			log.Printf("[SessionManager] -> Container assigned to session | Session: %s | Container Addr: %s", matchRequest.sessionHash, container)
@@ -121,9 +123,7 @@ func (s *SessionManagerService) run() {
 			//Check if there is a session assigned to the container
 			if session, ok := s.sessionMap[sessionHash]; ok {
 				// Remove the container from the maps
-				delete(s.sessionMap, sessionHash)
-				delete(s.containerMap, session.Addr)
-				log.Printf("[SessionManager] -> Session removed | Session: %s", sessionHash)
+				s.removeSession(sessionHash, session.Addr)
 				found = true
 			} else {
 				log.Printf("[SessionManager] -> Session not found | Session: %s", sessionHash)
@@ -156,6 +156,7 @@ func (s *SessionManagerService) run() {
 					SessionID: match.sessionID,
 					Addr:      dockerReady.(string),
 					ExpiresOn: getExpiresOn(),
+					StartedOn: time.Now().Unix(),
 				}
 
 				//Send the response
@@ -179,8 +180,7 @@ func (s *SessionManagerService) run() {
 			// Check if there is a session assigned to the container
 			if sessionHash, ok := s.containerMap[dockerStop.(string)]; ok {
 				// Remove the container from the maps
-				delete(s.containerMap, dockerStop.(string))
-				delete(s.sessionMap, sessionHash)
+				s.removeSession(sessionHash, dockerStop.(string))
 			}
 
 			//Check if the pool size is enough
@@ -280,8 +280,7 @@ func (s *SessionManagerService) run() {
 					log.Printf("[SessionManager] -> Session expired | Session: %s", sessionHash)
 
 					// Remove the container from the maps
-					delete(s.sessionMap, sessionHash)
-					delete(s.containerMap, session.Addr)
+					s.removeSession(sessionHash, session.Addr)
 
 					//Send broadcast docker service to stop the container
 					cbroadcast.Broadcast(BSessionStop, session.Addr)
@@ -303,6 +302,19 @@ func (s *SessionManagerService) subscribe() {
 	s.dockerReady, _ = cbroadcast.Subscribe(bDockerReady)
 	s.dockerStop, _ = cbroadcast.Subscribe(bDockerStop)
 	s.dockerState, _ = cbroadcast.Subscribe(bDockerState)
+}
+
+func (s *SessionManagerService) removeSession(sessionHash string, addr string) {
+
+	//Get elapsed time in session
+	startedOn := s.sessionMap[sessionHash].StartedOn
+	elapsed := time.Now().Unix() - startedOn
+	cbroadcast.Broadcast(BSessionMetricTime, elapsed)
+
+	delete(s.sessionMap, sessionHash)
+	delete(s.containerMap, addr)
+
+	log.Printf("[SessionManager] -> Session removed | Session: %s", sessionHash)
 }
 
 func getExpiresOn() int64 {

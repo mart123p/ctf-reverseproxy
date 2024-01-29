@@ -3,6 +3,7 @@ package metrics
 import (
 	"log"
 
+	"github.com/mart123p/ctf-reverseproxy/internal/config"
 	service "github.com/mart123p/ctf-reverseproxy/internal/services"
 	"github.com/mart123p/ctf-reverseproxy/internal/services/docker"
 	"github.com/mart123p/ctf-reverseproxy/internal/services/http/reverseproxy"
@@ -21,6 +22,7 @@ type MetricsService struct {
 	dockerState  cbroadcast.Channel
 	sessionStart cbroadcast.Channel
 	sessionStop  cbroadcast.Channel
+	sessionTime  cbroadcast.Channel
 	httpRequest  cbroadcast.Channel
 
 	metrics prometheusMetrics
@@ -34,6 +36,7 @@ func (*MetricsService) Register() {
 type dataMetrics struct {
 	projectSize    int
 	httpRequestMax float64
+	sessionTimeMax int64
 }
 
 type prometheusMetrics struct {
@@ -42,15 +45,21 @@ type prometheusMetrics struct {
 	projectRunning   prometheus.Gauge
 	session          prometheus.Gauge
 	httpRequestMax   prometheus.Gauge
-	httpRequest      prometheus.Histogram
+	sessionTimeMax   prometheus.Gauge
+
+	httpRequest prometheus.Histogram
+	sessionTime prometheus.Histogram
 
 	sessionServed prometheus.Counter
 }
 
 func (m *MetricsService) Init() {
 	m.shutdown = make(chan bool)
-	m.data.projectSize = 0
-	m.data.httpRequestMax = 0
+	m.data = dataMetrics{
+		projectSize:    0,
+		httpRequestMax: 0,
+		sessionTimeMax: 0,
+	}
 
 	m.metrics.projectSize = promauto.NewGauge(prometheus.GaugeOpts{
 		Name:      "project_size_info",
@@ -82,11 +91,25 @@ func (m *MetricsService) Init() {
 		Namespace: prometheusNamespace,
 	})
 
+	m.metrics.sessionTimeMax = promauto.NewGauge(prometheus.GaugeOpts{
+		Name:      "session_time_max_seconds",
+		Help:      "Max lifetime of a session",
+		Namespace: prometheusNamespace,
+	})
+
 	m.metrics.httpRequest = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name:      "http_request_proxy_queue_time_milliseconds",
 		Help:      "Time spent in queue waiting for a container to be available",
 		Namespace: prometheusNamespace,
 		Buckets:   prometheus.ExponentialBuckets(0.01, 5, 8),
+	})
+
+	m.metrics.sessionTime = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:      "session_time_seconds",
+		Help:      "Lifetime of a session",
+		Namespace: prometheusNamespace,
+		Buckets: prometheus.ExponentialBuckets(
+			float64(config.GetInt64(config.CReverseProxySessionTimeout)/2), 2, 5),
 	})
 
 	m.metrics.sessionServed = promauto.NewCounter(prometheus.CounterOpts{
@@ -135,6 +158,17 @@ func (m *MetricsService) run() {
 			m.metrics.sessionServed.Inc()
 		case <-m.sessionStop:
 			m.metrics.session.Dec()
+
+		case elapsed := <-m.sessionTime:
+			elapsedS := elapsed.(int64)
+
+			m.metrics.sessionTime.Observe(float64(elapsedS))
+
+			if elapsedS > m.data.sessionTimeMax {
+				m.data.sessionTimeMax = elapsedS
+				m.metrics.sessionTimeMax.Set(float64(m.data.sessionTimeMax))
+			}
+
 		case elapsed := <-m.httpRequest:
 			elapsedMs := elapsed.(float64)
 
@@ -151,7 +185,10 @@ func (m *MetricsService) run() {
 func (m *MetricsService) subscribe() {
 	m.projectSize, _ = cbroadcast.Subscribe(docker.BDockerMetricProjectSize)
 	m.dockerState, _ = cbroadcast.Subscribe(docker.BDockerMetricState)
+
 	m.sessionStart, _ = cbroadcast.Subscribe(sessionmanager.BSessionMetricStart)
 	m.sessionStop, _ = cbroadcast.Subscribe(sessionmanager.BSessionStop)
+	m.sessionTime, _ = cbroadcast.Subscribe(sessionmanager.BSessionMetricTime)
+
 	m.httpRequest, _ = cbroadcast.Subscribe(reverseproxy.BProxyMetricTime)
 }
