@@ -5,6 +5,7 @@ import (
 
 	service "github.com/mart123p/ctf-reverseproxy/internal/services"
 	"github.com/mart123p/ctf-reverseproxy/internal/services/docker"
+	"github.com/mart123p/ctf-reverseproxy/internal/services/http/reverseproxy"
 	"github.com/mart123p/ctf-reverseproxy/internal/services/sessionmanager"
 	"github.com/mart123p/ctf-reverseproxy/pkg/cbroadcast"
 	"github.com/prometheus/client_golang/prometheus"
@@ -22,27 +23,34 @@ type MetricsService struct {
 	sessionStop  cbroadcast.Channel
 	httpRequest  cbroadcast.Channel
 
-	projectSizeMetric int
-	metrics           prometheusMetrics
+	metrics prometheusMetrics
+	data    dataMetrics
 }
 
 func (*MetricsService) Register() {
 
 }
 
+type dataMetrics struct {
+	projectSize    int
+	httpRequestMax float64
+}
+
 type prometheusMetrics struct {
 	projectSize      prometheus.Gauge
 	containerRunning prometheus.Gauge
 	projectRunning   prometheus.Gauge
+	session          prometheus.Gauge
+	httpRequestMax   prometheus.Gauge
+	httpRequest      prometheus.Histogram
 
-	session           prometheus.Gauge
-	sessionServed     prometheus.Counter
-	httpRequestServed prometheus.Counter
+	sessionServed prometheus.Counter
 }
 
 func (m *MetricsService) Init() {
 	m.shutdown = make(chan bool)
-	m.projectSizeMetric = 0
+	m.data.projectSize = 0
+	m.data.httpRequestMax = 0
 
 	m.metrics.projectSize = promauto.NewGauge(prometheus.GaugeOpts{
 		Name:      "project_size_info",
@@ -68,15 +76,22 @@ func (m *MetricsService) Init() {
 		Namespace: prometheusNamespace,
 	})
 
-	m.metrics.sessionServed = promauto.NewCounter(prometheus.CounterOpts{
-		Name:      "sessions_total",
-		Help:      "Number of total sessions served",
+	m.metrics.httpRequestMax = promauto.NewGauge(prometheus.GaugeOpts{
+		Name:      "http_request_proxy_queue_time_max_milliseconds",
+		Help:      "Max time spent in queue waiting for a container to be available",
 		Namespace: prometheusNamespace,
 	})
 
-	m.metrics.httpRequestServed = promauto.NewCounter(prometheus.CounterOpts{
-		Name:      "http_request_proxy_total",
-		Help:      "Number of total http requests served",
+	m.metrics.httpRequest = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:      "http_request_proxy_queue_time_milliseconds",
+		Help:      "Time spent in queue waiting for a container to be available",
+		Namespace: prometheusNamespace,
+		Buckets:   prometheus.ExponentialBuckets(0.01, 5, 8),
+	})
+
+	m.metrics.sessionServed = promauto.NewCounter(prometheus.CounterOpts{
+		Name:      "sessions_total",
+		Help:      "Number of total sessions served",
 		Namespace: prometheusNamespace,
 	})
 	m.subscribe()
@@ -105,12 +120,12 @@ func (m *MetricsService) run() {
 			return
 
 		case projectSize := <-m.projectSize:
-			m.projectSizeMetric = projectSize.(int)
-			m.metrics.projectSize.Set(float64(m.projectSizeMetric))
+			m.data.projectSize = projectSize.(int)
+			m.metrics.projectSize.Set(float64(m.data.projectSize))
 
 		case dockerState := <-m.dockerState:
 			projectsRunning := dockerState.(int)
-			containersRunning := projectsRunning * m.projectSizeMetric
+			containersRunning := projectsRunning * m.data.projectSize
 
 			m.metrics.projectRunning.Set(float64(projectsRunning))
 			m.metrics.containerRunning.Set(float64(containersRunning))
@@ -120,8 +135,15 @@ func (m *MetricsService) run() {
 			m.metrics.sessionServed.Inc()
 		case <-m.sessionStop:
 			m.metrics.session.Dec()
-		case <-m.httpRequest:
-			m.metrics.httpRequestServed.Inc()
+		case elapsed := <-m.httpRequest:
+			elapsedMs := elapsed.(float64)
+
+			m.metrics.httpRequest.Observe(elapsedMs)
+
+			if elapsedMs > m.data.httpRequestMax {
+				m.data.httpRequestMax = elapsedMs
+				m.metrics.httpRequestMax.Set(m.data.httpRequestMax)
+			}
 		}
 	}
 }
@@ -131,5 +153,5 @@ func (m *MetricsService) subscribe() {
 	m.dockerState, _ = cbroadcast.Subscribe(docker.BDockerMetricState)
 	m.sessionStart, _ = cbroadcast.Subscribe(sessionmanager.BSessionMetricStart)
 	m.sessionStop, _ = cbroadcast.Subscribe(sessionmanager.BSessionStop)
-	m.httpRequest, _ = cbroadcast.Subscribe(sessionmanager.BSessionMetricHttpRequest)
+	m.httpRequest, _ = cbroadcast.Subscribe(reverseproxy.BProxyMetricTime)
 }

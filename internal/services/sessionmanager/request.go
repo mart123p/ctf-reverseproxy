@@ -1,7 +1,5 @@
 package sessionmanager
 
-import "github.com/mart123p/ctf-reverseproxy/pkg/cbroadcast"
-
 type matchRequest struct {
 	sessionID    string
 	sessionHash  string
@@ -29,8 +27,6 @@ func MatchSessionContainer(sessionID string, sessionHash string) string {
 		sessionHash:  sessionHash,
 		responseChan: make(chan string),
 	}
-
-	cbroadcast.Broadcast(BSessionMetricHttpRequest, nil)
 
 	//Send the match request
 	singleton.MatchChan <- match

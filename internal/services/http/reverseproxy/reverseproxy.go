@@ -10,6 +10,7 @@ import (
 	"github.com/mart123p/ctf-reverseproxy/internal/config"
 	service "github.com/mart123p/ctf-reverseproxy/internal/services"
 	"github.com/mart123p/ctf-reverseproxy/internal/services/sessionmanager"
+	"github.com/mart123p/ctf-reverseproxy/pkg/cbroadcast"
 )
 
 type ReverseProxy struct {
@@ -21,7 +22,12 @@ func (rp *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	sessionId := r.Header.Get(rp.sessionHeader)
 	sessionHash := sessionmanager.GetHash(sessionId)
+
+	start := time.Now()
 	targetHost := sessionmanager.MatchSessionContainer(sessionId, sessionHash)
+	elapsed := time.Since(start)
+
+	cbroadcast.Broadcast(BProxyMetricTime, float64(elapsed.Microseconds())/1000.0)
 
 	// Create a new reverse proxy
 	proxy := &httputil.ReverseProxy{
@@ -50,10 +56,6 @@ func (rp *ReverseProxy) Start() {
 	log.Printf("[ReverseProxy] -> Starting Reverse Proxy Server")
 
 	go rp.run()
-}
-
-func (rp *ReverseProxy) Register() {
-	//Register the broadcast channels
 }
 
 func (rp *ReverseProxy) Shutdown() {
