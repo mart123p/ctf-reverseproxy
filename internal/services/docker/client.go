@@ -350,6 +350,29 @@ func (d *DockerService) startResource(ctfId int) string {
 			hostConfig.ReadonlyPaths = []string{}
 		}
 
+		//Check if the container already exists
+		containers, err := d.dockerClient.ContainerList(context.Background(), types.ContainerListOptions{
+			Filters: filters.NewArgs(filters.KeyValuePair{
+				Key:   "name",
+				Value: serviceName,
+			}),
+			All: true,
+		})
+		if err != nil {
+			panic(err)
+		}
+
+		if len(containers) > 0 {
+			log.Printf("[Docker] -> Container \"%s\" already exists. Removing it", serviceName)
+			err = d.dockerClient.ContainerRemove(context.Background(), containers[0].ID, types.ContainerRemoveOptions{
+				Force: true,
+			})
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		//Create the container
 		_, err = d.dockerClient.ContainerCreate(context.Background(), &config, &hostConfig, &networkConfig, nil, serviceName)
 		if err != nil {
 			panic(err)
