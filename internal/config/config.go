@@ -40,7 +40,6 @@ func setupDefault() {
 
 	viper.SetDefault(CDockerHost, "unix:///var/run/docker.sock")
 
-	viper.SetDefault(CDockerNetwork, "ctf-bridge")
 	viper.SetDefault(CDockerContainerName, "")
 	viper.SetDefault(CDockerComposeWorkdir, ".")
 	viper.SetDefault(CDockerComposeFile, "docker-compose.yml")

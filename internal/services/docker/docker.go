@@ -35,7 +35,6 @@ func (d *DockerService) Init() {
 	d.containerId = ""
 
 	d.compose = composeFile{}
-	d.compose.ctfNetwork = config.GetString(config.CDockerNetwork)
 
 	d.reAddrCtfId = regexp.MustCompile(`-(\d+):`)
 

@@ -49,37 +49,7 @@ func getName(name string, id int) string {
 
 // upDocker makes docker ready to deploy containers
 func (d *DockerService) upDocker() {
-	log.Printf("[Docker] -> Starting creating CTF docker requirements")
-
-	//Create the default network used for ctf-reverseproxy if does not exist
-	networks, err := d.dockerClient.NetworkList(context.Background(), types.NetworkListOptions{})
-	if err != nil {
-		panic(err)
-	}
-
-	networkFound := false
-	for _, network := range networks {
-		if network.Name == d.compose.ctfNetwork {
-			d.compose.ctfNetworkId = network.ID
-			networkFound = true
-			log.Printf("[Docker] -> Network \"%s\" found", d.compose.ctfNetwork)
-			break
-		}
-	}
-
-	if !networkFound {
-		log.Printf("[Docker] -> Creating network \"%s\"", d.compose.ctfNetwork)
-		_, err = d.dockerClient.NetworkCreate(context.Background(), d.compose.ctfNetwork, types.NetworkCreate{
-			Driver: "bridge",
-			Labels: map[string]string{
-				ctfReverseProxyLabel: "true",
-			},
-		})
-		if err != nil {
-			panic(err)
-		}
-		log.Printf("[Docker] -> Created network \"%s\"", d.compose.ctfNetwork)
-	}
+	log.Printf("[Docker] -> Getting required informations")
 
 	reverseProxyContainerName := config.GetString(config.CDockerContainerName)
 
@@ -103,7 +73,7 @@ func (d *DockerService) upDocker() {
 
 // downDocker destroy all containers and networks
 func (d *DockerService) downDocker() {
-	log.Printf("[Docker] -> Starting removing CTF docker requirements")
+	log.Printf("[Docker] -> Starting removing CTF docker resources")
 
 	//Clear unused containers
 	containers, err := d.dockerClient.ContainerList(context.Background(), types.ContainerListOptions{})
@@ -135,7 +105,7 @@ func (d *DockerService) downDocker() {
 		}
 	}
 
-	log.Printf("[Docker] -> Docker CTF requirements removed")
+	log.Printf("[Docker] -> CTF docker resources removed")
 }
 
 func (d *DockerService) stopResource(ctfId int) {

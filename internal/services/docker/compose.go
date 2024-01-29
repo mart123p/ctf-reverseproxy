@@ -11,10 +11,8 @@ import (
 )
 
 type composeFile struct {
-	ctfNetwork   string
-	ctfNetworkId string
-	mainService  int
-	project      *types.Project
+	mainService int
+	project     *types.Project
 }
 
 const ctfReverseProxyAnnotation = "ctf-reverseproxy"
