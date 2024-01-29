@@ -72,6 +72,9 @@ func (d *DockerService) run() {
 
 	d.upDocker()
 
+	//Send the number of projects
+	cbroadcast.Broadcast(BDockerMetricProjectSize, len(d.compose.project.Services))
+
 	for {
 		select {
 		case <-d.shutdown:
