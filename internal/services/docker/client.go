@@ -397,6 +397,12 @@ func (d *DockerService) startResource(ctfId int) string {
 func (d *DockerService) checkState() ([]string, []string) {
 	containersCount := make(map[int]int)
 
+	//Get the current container
+	ctfProxyContainer, err := d.dockerClient.ContainerInspect(context.Background(), d.containerId)
+	if err != nil {
+		panic(err)
+	}
+
 	containers, err := d.dockerClient.ContainerList(context.Background(), types.ContainerListOptions{})
 	if err != nil {
 		panic(err)
@@ -429,6 +435,19 @@ func (d *DockerService) checkState() ([]string, []string) {
 					log.Printf("Warning: [Docker] -> Container %s is not running", container.ID)
 				} else {
 					containersCount[ctfId]++
+
+					//Check if the container is connected to the network
+					for network_name, network := range container.NetworkSettings.Networks {
+						//TODO make sure to use labels or something like that to check if this is the main network to connect to.
+						if _, ok := ctfProxyContainer.NetworkSettings.Networks[network_name]; !ok {
+							log.Printf("[Docker] -> Reverse proxy is not connected to the network %s. Adding it", network_name)
+							err = d.dockerClient.NetworkConnect(context.Background(), network.NetworkID, d.containerId, nil)
+							if err != nil {
+								panic(err)
+							}
+						}
+					}
+
 				}
 			} else {
 				log.Printf("Warning: [Docker] -> Container %s has no ctf id", container.ID)
