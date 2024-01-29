@@ -117,6 +117,7 @@ func (d *DockerService) run() {
 
 			//Send the state report to be parsed in the session manager
 			cbroadcast.Broadcast(BDockerState, state)
+			cbroadcast.Broadcast(BDockerMetricState, len(state))
 		}
 	}
 }

@@ -87,6 +87,7 @@ func (s *SessionManagerService) run() {
 
 			//Request a new container
 			cbroadcast.Broadcast(BSessionRequest, nil)
+			cbroadcast.Broadcast(BSessionMetricStart, nil)
 
 			//Check if the queue is empty
 			if len(s.containerPoolQueue) == 0 {

@@ -5,38 +5,39 @@ import (
 
 	"github.com/mart123p/ctf-reverseproxy/internal/services/http/mgmt/api"
 	"github.com/mart123p/ctf-reverseproxy/pkg/rbody"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Functions that can be called by the various HTTP requests types
 
-//Get handler for method GET
+// Get handler for method GET
 func (m *MgmtServer) Get(path string, f func(w http.ResponseWriter, r *http.Request)) {
 	m.Router.HandleFunc(path, f).Methods("GET")
 }
 
-//Post handler for method POST
+// Post handler for method POST
 func (m *MgmtServer) Post(path string, f func(w http.ResponseWriter, r *http.Request)) {
 	m.Router.HandleFunc(path, f).Methods("POST")
 }
 
-//Put handler for method PUT
+// Put handler for method PUT
 func (m *MgmtServer) Put(path string, f func(w http.ResponseWriter, r *http.Request)) {
 	m.Router.HandleFunc(path, f).Methods("PUT")
 }
 
-//Delete handler for method DELETE
+// Delete handler for method DELETE
 func (m *MgmtServer) Delete(path string, f func(w http.ResponseWriter, r *http.Request)) {
 	m.Router.HandleFunc(path, f).Methods("DELETE")
 }
 
-//Head handler for method GET
+// Head handler for method GET
 func (m *MgmtServer) Head(path string, f func(w http.ResponseWriter, r *http.Request)) {
 	m.Router.HandleFunc(path, f).Methods("HEAD")
 }
 
 func (m *MgmtServer) setRoutes() {
+	m.Router.Handle("/metrics", promhttp.Handler())
 	m.Get("/healthz", api.GetHealthz)
-	m.Get("/metrics", api.GetMetrics)
 
 	m.Get("/session", api.GetSession)
 	m.Post("/session/{id}", api.PostSession)
