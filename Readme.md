@@ -1,4 +1,4 @@
-# Project Name
+# CTF Reverse Proxy
 
 A Reverse Proxy with Automatic Docker Container Creation for CTF Challenges
 
